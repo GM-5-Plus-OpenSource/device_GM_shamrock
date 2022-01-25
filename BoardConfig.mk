@@ -16,6 +16,7 @@
 
 DEVICE_PATH := device/GM/shamrock
 BOARD_VENDOR := GM
+TARGET_SPECIFIC_HEADER_PATH := $(DEVICE_PATH)/include
 
 # Architecture
 TARGET_ARCH := arm64
