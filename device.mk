@@ -163,6 +163,10 @@ PRODUCT_PACKAGES += \
     android.hardware.keymaster@3.0-impl \
     android.hardware.keymaster@3.0-service
 
+# Lights
+PRODUCT_PACKAGES += \
+    android.hardware.light@2.0-service.device
+
 # HW crypto
 PRODUCT_PACKAGES += \
     vendor.qti.hardware.cryptfshw@1.0-service-qti.qsee
