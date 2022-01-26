@@ -373,5 +373,8 @@ PRODUCT_PACKAGES += \
 PRODUCT_BOOT_JARS += \
     WfdCommon
 
+# Properties
+-include $(LOCAL_PATH)/prop.mk
+
 # Inherit vendor
 $(call inherit-product, vendor/GM/shamrock/shamrock-vendor.mk)
