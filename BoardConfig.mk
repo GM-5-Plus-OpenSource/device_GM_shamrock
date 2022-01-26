@@ -149,7 +149,7 @@ BOARD_MKBOOTIMG_ARGS := --ramdisk_offset 0x01000000 --tags_offset 0x00000100
 BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb
 TARGET_KERNEL_ARCH := arm64
 TARGET_KERNEL_SOURCE := kernel/GM/shamrock
-TARGET_KERNEL_CONFIG := shamrock_defconfig
+TARGET_KERNEL_CONFIG := test_defconfig
 TARGET_KERNEL_VERSION := 3.10
 
 # Security patch level
