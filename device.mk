@@ -175,6 +175,12 @@ PRODUCT_PACKAGES += \
     android.system.net.netd@1.0 \
     libandroid_net
 
+# IPv6
+PRODUCT_PACKAGES += \
+    ebtables \
+    ethertypes \
+    libebtc
+
 # OMX
 PRODUCT_PACKAGES += \
     libc2dcolorconvert \
