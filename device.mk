@@ -70,6 +70,7 @@ PRODUCT_PACKAGES += \
     libqcomvoiceprocessing \
     libvolumelistener \
     libtinycompress \
+    libtinyxml \
     tinymix
 
 # Audio configuration
