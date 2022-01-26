@@ -239,5 +239,9 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
 	android.hardware.weaver@1.0
 
+# VNDK-SP:
+PRODUCT_PACKAGES += \
+    vndk-sp
+
 # Inherit vendor
 $(call inherit-product, vendor/GM/shamrock/shamrock-vendor.mk)
