@@ -190,6 +190,9 @@ PRODUCT_VENDOR_MOVE_ENABLED := true
 DEVICE_MANIFEST_FILE := $(DEVICE_PATH)/manifest.xml
 DEVICE_MATRIX_FILE := $(DEVICE_PATH)/compatibility_matrix.xml
 
+# SurfaceFlinger
+TARGET_USE_AOSP_SURFACEFLINGER := true
+
 # Wi-Fi
 BOARD_HAS_QCOM_WLAN := true
 BOARD_USES_AOSP_WLAN_HAL := true
