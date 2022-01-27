@@ -53,6 +53,11 @@ PRODUCT_PACKAGES += \
     com.dsi.ant.antradio_library \
     libantradio
 
+# Authsecret
+PRODUCT_PACKAGES += \
+	android.hardware.authsecret@1.0 \
+	android.hardware.authsecret@1.0-service
+
 # Audio
 PRODUCT_PACKAGES += \
     android.hardware.audio@2.0-impl \
