@@ -174,7 +174,7 @@ BOARD_USES_QCOM_HARDWARE := true
 
 # RIL
 TARGET_PROVIDES_QTI_TELEPHONY_JAR := true
-ENABLE_VENDOR_RIL_SERVICE := true
+DISABLE_RILD_OEM_HOOK := true
 
 # Sepolicy
 #include device/qcom/sepolicy-legacy-um/SEPolicy.mk
