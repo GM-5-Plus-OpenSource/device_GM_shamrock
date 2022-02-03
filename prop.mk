@@ -63,32 +63,49 @@ vidc.enc.dcvs.extra-buff-count=2
 # Cne/Dpm
 PRODUCT_PROPERTY_OVERRIDES += \
 persist.vendor.cne.feature=1 \
-persist.dpm.feature=1
+persist.dpm.feature=1 \
+persist.vendor.sys.cnd.iwlan=1
 
 # Display
 PRODUCT_PROPERTY_OVERRIDES += \
-debug.egl.hw=0 \
-debug.enable.sglscale=1 \
-debug.gralloc.enable_fb_ubwc=1 \
-debug.mdpcomp.logs=0 \
+debug.hwui.use_buffer_age=false \
+debug.sf.disable_backpressure=1 \
 debug.sf.enable_hwc_vds=1 \
 debug.sf.hw=0 \
 debug.sf.latch_unsignaled=1 \
-debug.sf.recomputecrop=0 \
-debug.sf.disable_backpressure=1 \
-dev.pm.dyn_samplingrate=1 \
 persist.demo.hdmirotationlock=false \
-persist.hwc.enable_vds=1 \
-persist.hwc.mdpcomp.enable=true \
-ro.opengles.version=196609 \
-ro.hardware.egl=adreno
-ro.qualcomm.cabl=0 \
-ro.vendor.display.cabl=2 \
+ro.surface_flinger.force_hwc_copy_for_virtual_displays=true \
+ro.surface_flinger.max_virtual_display_dimension=4096 \
+ro.hardware.egl=adreno \
+ro.hardware.vulkan=adreno \
+ro.opengles.version=196608 \
+vendor.display.disable_skip_validate=1 \
+ro.vendor.display.cabl=0 \
 sdm.debug.disable_skip_validate=1 \
 vendor.display.disable_skip_validate=1 \
 vendor.display.enable_default_color_mode=1 \
-vendor.gralloc.enable_fb_ubwc=1 \
-sys.display-size=1920x1080
+vendor.gralloc.enable_fb_ubwc=1
+
+# Memory optimizations
+PRODUCT_PROPERTY_OVERRIDES += \
+ro.vendor.qti.sys.fw.bservice_enable=true \
+ro.config.fha_enable=true \
+ro.sys.fw.bg_apps_limit=32 \
+ro.config.dha_cached_max=16 \
+ro.config.dha_empty_max=42 \
+ro.config.dha_empty_init=32 \
+ro.config.dha_lmk_scale=0.545 \
+ro.config.dha_th_rate=2.3 \
+ro.config.sdha_apps_bg_max=64 \
+ro.config.sdha_apps_bg_min=8
+
+# Perf Ux IOPrefetcher
+PRODUCT_PROPERTY_OVERRIDES += \
+vendor.enable_prefetch=1 \
+vendor.iop.enable_uxe=1 \
+vendor.iop.enable_prefetch_ofr=1 \
+vendor.perf.iop_v3.enable=1 \
+persist.vendor.qti.games.gt.prof=1
 
 # DRM
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -122,17 +139,30 @@ mmp.enable.3g2=true \
 media.aac_51_output_enabled=true \
 mm.enable.qcom_parser=4194303
 
-# Memory optimizations
-PRODUCT_PROPERTY_OVERRIDES += \
-ro.vendor.qti.sys.fw.bservice_enable=true \
-ro.vendor.qti.sys.fw.bservice_age=5000 \
-ro.vendor.qti.sys.fw.bservice_limit=5 \
-ro.vendor.qti.am.reschedule_service=true
-
 # Perf
 PRODUCT_PROPERTY_OVERRIDES += \
+dalvik.vm.boot-dex2oat-threads=8 \
+ro.sys.fw.dex2oat_thread_count=8 \
+dalvik.vm.bg-dex2oat-threads=2 \
+dalvik.vm.dex2oat-threads=6 \
+ro.vendor.qti.am.reschedule_service=true \
+ro.vendor.qti.core_ctl_min_cpu=1 \
+ro.vendor.qti.core_ctl_max_cpu=4 \
+ro.vendor.at_library=libqti-at.so \
 ro.vendor.extension_library=libqti-perfd-client.so \
+ro.vendor.gt_library=libqti-gt.so \
 vendor.perf.gestureflingboost.enable=true
+
+# RAM optimizations
+PRODUCT_PROPERTY_OVERRIDES += \
+ro.vendor.qti.sys.fw.bservice_enable=true \
+ro.vendor.qti.sys.fw.bservice_limit=5 \
+ro.vendor.qti.sys.fw.bservice_age=5000 \
+ro.vendor.qti.sys.fw.use_trim_settings=true \
+ro.vendor.qti.sys.fw.empty_app_percent=50 \
+ro.vendor.qti.sys.fw.trim_empty_percent=100 \
+ro.vendor.qti.sys.fw.trim_cache_percent=100 \
+ro.vendor.qti.sys.fw.trim_enable_memory=2147483648
 
 # Netmgrd
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -180,26 +210,22 @@ ro.telephony.default_network=22,22 \
 ro.telephony.iwlan_operation_mode=legacy \
 service.qti.ims.enabled=1
 
-# SurfaceFlinger
-PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
-ro.surface_flinger.protected_contents=true \
-ro.surface_flinger.force_hwc_copy_for_virtual_displays=true \
-ro.surface_flinger.max_virtual_display_dimension=4096 \
-ro.surface_flinger.vsync_event_phase_offset_ns=2000000 \
-ro.surface_flinger.vsync_sf_event_phase_offset_ns=6000000 \
-ro.surface_flinger.max_frame_buffer_acquired_buffers=3
-
 # Time Services
 PRODUCT_PROPERTY_OVERRIDES += \
 persist.timed.enable=true
 
-# Trim properties
+# SurfaceFlinger
 PRODUCT_PROPERTY_OVERRIDES += \
-ro.vendor.qti.sys.fw.use_trim_settings=true \
-ro.vendor.qti.sys.fw.empty_app_percent=50 \
-ro.vendor.qti.sys.fw.trim_empty_percent=100 \
-ro.vendor.qti.sys.fw.trim_cache_percent=100 \
-ro.vendor.qti.sys.fw.trim_enable_memory=2147483648
+ro.surface_flinger.protected_contents=true \
+ro.surface_flinger.max_frame_buffer_acquired_buffers=3 \
+debug.sf.early_phase_offset_ns=1500000 \
+debug.sf.early_app_phase_offset_ns=1500000 \
+debug.sf.early_gl_phase_offset_ns=3000000 \
+debug.sf.early_gl_app_phase_offset_ns=15000000
+
+# UX
+PRODUCT_PROPERTY_OVERRIDES += \
+sys.use_fifo_ui=1
 
 # Tcp
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -208,7 +234,3 @@ net.tcp.2g_init_rwnd=10
 # Wifi
 PRODUCT_PROPERTY_OVERRIDES += \
 wifi.interface=wlan0
-
-# USAP
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-persist.device_config.runtime_native.usap_pool_enabled=true
