@@ -354,7 +354,7 @@ case "$target" in
 				    fi
 				    ;;
 				"MTP" | "QRD")
-				       setprop qemu.hw.mainkeys 0
+				       setprop qemu.hw.mainkeys 1
 				       ;;
 		      esac
 		      ;;
@@ -406,7 +406,7 @@ case "$target" in
              hw_platform=`cat /sys/devices/system/soc/soc0/hw_platform`
         fi
         case "$soc_id" in
-             "293" | "304" | "338" | "351" )
+             "293" | "304" | "338" )
                   case "$hw_platform" in
                        "Surf")
                                     setprop qemu.hw.mainkeys 0
@@ -442,16 +442,16 @@ else
 fi
 
 cur_version_info=`cat /firmware/verinfo/ver_info.txt`
-#if [ ! -f /firmware/verinfo/ver_info.txt -o "$prev_version_info" != "$cur_version_info" ]; then
+if [ ! -f /firmware/verinfo/ver_info.txt -o "$prev_version_info" != "$cur_version_info" ]; then
     rm -rf /data/vendor/radio/modem_config
     mkdir /data/vendor/radio/modem_config
     chmod 770 /data/vendor/radio/modem_config
     cp -r /firmware/image/modem_pr/mcfg/configs/* /data/vendor/radio/modem_config
-	cp /system/etc/mbn_ota.txt /data/vendor/radio/modem_config
     chown -hR radio.radio /data/vendor/radio/modem_config
     cp /firmware/verinfo/ver_info.txt /data/vendor/radio/ver_info.txt
     chown radio.radio /data/vendor/radio/ver_info.txt
-#fi
+fi
+cp /firmware/image/modem_pr/mbn_ota.txt /data/vendor/radio/modem_config
 chown radio.radio /data/vendor/radio/modem_config/mbn_ota.txt
 echo 1 > /data/vendor/radio/copy_complete
 

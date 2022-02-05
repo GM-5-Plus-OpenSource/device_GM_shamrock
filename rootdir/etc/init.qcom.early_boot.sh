@@ -69,7 +69,7 @@ function set_density_by_fb() {
         if [ $fb_width -ge 1440 ]; then
            setprop ro.sf.lcd_density 560
         elif [ $fb_width -ge 1080 ]; then
-           setprop ro.sf.lcd_density 420
+           setprop ro.sf.lcd_density 480
         elif [ $fb_width -ge 720 ]; then
            setprop ro.sf.lcd_density 320 #for 720X1280 resolution
         elif [ $fb_width -ge 480 ]; then
@@ -303,9 +303,6 @@ case "$target" in
                         fi
                     fi
                     ;;
-              264)
-                  setprop persist.graphics.vulkan.disable true
-                  ;;
       esac
       ;;
 esac
@@ -370,15 +367,6 @@ if [ -f /firmware/verinfo/ver_info.txt ]; then
     fi;
 fi
 
-baseband=`getprop ro.baseband`
-#enable atfwd daemon all targets except sda, apq, qcs
-case "$baseband" in
-    "apq" | "sda" | "qcs" )
-        setprop persist.radio.atfwd.start false;;
-    *)
-        setprop persist.radio.atfwd.start true;;
-esac
-
 #set default lcd density
 #Since lcd density has read only
 #property, it will not overwrite previous set
@@ -418,9 +406,6 @@ function setHDMIPermission() {
    set_perms $file/cec/wr_msg system.graphics 0600
    set_perms $file/hdcp/tp system.graphics 0664
    set_perms $file/hdmi_audio_cb audioserver.audio 0600
-   set_perms $file/pll_enable system.graphics 0664
-   set_perms $file/hdmi_ppm system.graphics 0664
-
    ln -s $dev_file $dev_gfx_hdmi
 }
 

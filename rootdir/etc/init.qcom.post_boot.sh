@@ -30,28 +30,10 @@
 target=`getprop ro.board.platform`
 
 function configure_zram_parameters() {
-    MemTotalStr=`cat /proc/meminfo | grep MemTotal`
-    MemTotal=${MemTotalStr:16:8}
-
-    low_ram=`getprop ro.config.low_ram`
-
-    # Zram disk - 75% for Go devices.
-    # For 512MB Go device, size = 384MB
-    # For 1GB Go device, size = 768MB
-    # Others - 512MB size
-    # And enable lz4 zram compression for Go devices
+    # Zram disk - 512MB size
     zram_enable=`getprop ro.vendor.qti.config.zram`
     if [ "$zram_enable" == "true" ]; then
-        if [ $MemTotal -le 524288 ] && [ "$low_ram" == "true" ]; then
-            echo lz4 > /sys/block/zram0/comp_algorithm
-            echo 402653184 > /sys/block/zram0/disksize
-        elif [ $MemTotal -le 1048576 ] && [ "$low_ram" == "true" ]; then
-            echo lz4 > /sys/block/zram0/comp_algorithm
-            echo 805306368 > /sys/block/zram0/disksize
-        else
-            echo lz4 > /sys/block/zram0/comp_algorithm
-            echo 536870912 > /sys/block/zram0/disksize
-        fi
+        echo 536870912 > /sys/block/zram0/disksize
         mkswap /dev/block/zram0
         swapon /dev/block/zram0 -p 32758
     fi
@@ -74,7 +56,6 @@ function configure_memory_parameters() {
     #
 
 ProductName=`getprop ro.product.name`
-low_ram=`getprop ro.config.low_ram`
 
 if [ "$ProductName" == "msm8996" ]; then
       # Enable Adaptive LMK
@@ -97,7 +78,6 @@ else
     # Normalized ADJ for HOME is 6. Hence multiply by 6
     # ADJ score represented as INT in LMK params, actual score can be in decimal
     # Hence add 6 considering a worst case of 0.9 conversion to INT (0.9*6).
-    # For uLMK + Memcg, this will be set as 6 since adj is zero.
     set_almk_ppr_adj=$(((set_almk_ppr_adj * 6) + 6))
     echo $set_almk_ppr_adj > /sys/module/lowmemorykiller/parameters/adj_max_shift
     echo $set_almk_ppr_adj > /sys/module/process_reclaim/parameters/min_score_adj
@@ -123,17 +103,10 @@ else
         echo "14746,18432,22118,25805,40000,55000" > /sys/module/lowmemorykiller/parameters/minfree
         echo 81250 > /sys/module/lowmemorykiller/parameters/vmpressure_file_min
     else
-        if [ $MemTotal -le 1048576 ] && [ "$low_ram" == "true" ]; then
-            # Disable KLMK, ALMK & PPR for Go devices
-            echo 0 > /sys/module/lowmemorykiller/parameters/enable_lmk
-            echo 0 > /sys/module/lowmemorykiller/parameters/enable_adaptive_lmk
-            echo 0 > /sys/module/process_reclaim/parameters/enable_process_reclaim
-        else
-            echo 50 > /sys/module/process_reclaim/parameters/pressure_min
-            echo 512 > /sys/module/process_reclaim/parameters/per_swap_size
-            echo "15360,19200,23040,26880,34415,43737" > /sys/module/lowmemorykiller/parameters/minfree
-            echo 53059 > /sys/module/lowmemorykiller/parameters/vmpressure_file_min
-        fi
+        echo 50 > /sys/module/process_reclaim/parameters/pressure_min
+        echo 512 > /sys/module/process_reclaim/parameters/per_swap_size
+        echo "15360,19200,23040,26880,34415,43737" > /sys/module/lowmemorykiller/parameters/minfree
+        echo 53059 > /sys/module/lowmemorykiller/parameters/vmpressure_file_min
     fi
 
     configure_zram_parameters
@@ -961,6 +934,7 @@ case "$target" in
         esac
         # Set Memory parameters
         configure_memory_parameters
+        restorecon -R /sys/devices/system/cpu
     ;;
 esac
 
@@ -1329,12 +1303,12 @@ case "$target" in
                 # Enable timer migration to little cluster
                 echo 1 > /proc/sys/kernel/power_aware_timer_migration
 
-                case "$soc_id" in
-                        "277" | "278")
-                        # Start energy-awareness for 8976
-                        start energy-awareness
-                ;;
-                esac
+                #case "$soc_id" in
+                #        "277" | "278")
+                # Start energy-awareness for 8976
+                #        start energy-awareness
+                #;;
+                #esac
 
                 #enable sched colocation and colocation inheritance
                 echo 130 > /proc/sys/kernel/sched_grp_upmigrate
@@ -1344,10 +1318,14 @@ case "$target" in
                 # Set Memory parameters
                 configure_memory_parameters
 
+                # Set voltage_max value
+		echo $(cat /sys/class/power_supply/battery/voltage_max) > /sys/class/power_supply/usb/voltage_max
+
             ;;
         esac
         #Enable Memory Features
         enable_memory_features
+        restorecon -R /sys/devices/system/cpu
     ;;
 esac
 
@@ -1367,7 +1345,7 @@ case "$target" in
         fi
 
         case "$soc_id" in
-            "293" | "304" | "338" | "351" )
+            "293" | "304" | "338" )
 
                 # Start Host based Touch processing
                 case "$hw_platform" in
@@ -1583,25 +1561,14 @@ case "$target" in
         else
             hw_platform=`cat /sys/devices/system/soc/soc0/hw_platform`
         fi
-	if [ -f /sys/devices/soc0/platform_subtype_id ]; then
-	    platform_subtype_id=`cat /sys/devices/soc0/platform_subtype_id`
-        fi
 
         case "$soc_id" in
            "303" | "307" | "308" | "309" | "320" )
 
                   # Start Host based Touch processing
                   case "$hw_platform" in
-                    "MTP" )
-			start_hbtp
-                        ;;
-                  esac
-
-                  case "$hw_platform" in
-                    "Surf" | "RCM" )
-			if [ $platform_subtype_id -ne "4" ]; then
-			    start_hbtp
-		        fi
+                    "MTP" | "Surf" | "RCM" )
+                        start_hbtp
                         ;;
                   esac
                 # Apply Scheduler and Governor settings for 8917 / 8920
@@ -2974,6 +2941,7 @@ case "$target" in
 
         # Set Memory parameters
         configure_memory_parameters
+        restorecon -R /sys/devices/system/cpu
 	;;
 esac
 
@@ -3042,19 +3010,10 @@ case "$target" in
         esac
     ;;
     "msm8909")
-        echo 128 > /sys/block/mmcblk0/bdi/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0/queue/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0rpmb/bdi/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0rpmb/queue/read_ahead_kb
         setprop sys.post_boot.parsed 1
     ;;
     "msm8952")
-        echo 128 > /sys/block/mmcblk0/bdi/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0/queue/read_ahead_kb
         echo 128 > /sys/block/dm-0/queue/read_ahead_kb
-        echo 128 > /sys/block/dm-1/queue/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0rpmb/bdi/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0rpmb/queue/read_ahead_kb
         setprop sys.post_boot.parsed 1
     ;;
     "msm8937" | "msm8953")
@@ -3062,15 +3021,8 @@ case "$target" in
         echo 128 > /sys/block/mmcblk0/queue/read_ahead_kb
         echo 128 > /sys/block/dm-0/queue/read_ahead_kb
         echo 128 > /sys/block/dm-1/queue/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0rpmb/bdi/read_ahead_kb
-        echo 128 > /sys/block/mmcblk0rpmb/queue/read_ahead_kb
         setprop sys.post_boot.parsed 1
-
-        low_ram_enable=`getprop ro.config.low_ram`
-
-        if [ "$low_ram_enable" != "true" ]; then
         start gamed
-        fi
     ;;
     "msm8974")
         start mpdecision
