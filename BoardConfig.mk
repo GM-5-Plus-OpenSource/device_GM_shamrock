@@ -208,6 +208,9 @@ TARGET_PLATFORM_DEVICE_BASE := /devices/soc.0/
 # SurfaceFlinger
 TARGET_USE_AOSP_SURFACEFLINGER := true
 
+# Properties
+TARGET_VENDOR_PROP += $(DEVICE_PATH)/vendor.prop
+
 # Wi-Fi
 BOARD_HAS_QCOM_WLAN := true
 BOARD_USES_AOSP_WLAN_HAL := true
