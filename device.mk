@@ -25,6 +25,10 @@ DEVICE_PACKAGE_OVERLAYS += \
     $(LOCAL_PATH)/overlay \
     $(LOCAL_PATH)/overlay-lineage
 
+# RRO (Runtime Resource Overlay)
+PRODUCT_ENFORCE_RRO_TARGETS := \
+    framework-res
+
 #Soong
 PRODUCT_BOARD_PLATFORM := msm8952
 PRODUCT_USES_QCOM_HARDWARE := true
