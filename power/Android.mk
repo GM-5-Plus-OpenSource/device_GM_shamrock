@@ -12,6 +12,7 @@ ifeq ($(TARGET_USES_INTERACTION_BOOST),true)
 endif
 
 LOCAL_SRC_FILES := power-shamrock.c
+LOCAL_CFLAGS += -DMPCTLV3
 LOCAL_MODULE := libpower_shamrock
 LOCAL_VENDOR_MODULE := true
 include $(BUILD_STATIC_LIBRARY)
