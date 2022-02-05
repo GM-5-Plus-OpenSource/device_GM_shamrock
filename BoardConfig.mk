@@ -184,7 +184,7 @@ TARGET_PROVIDES_QTI_TELEPHONY_JAR := true
 DISABLE_RILD_OEM_HOOK := true
 
 # Sepolicy
-#include device/qcom/sepolicy-legacy-um/SEPolicy.mk
+include device/qcom/sepolicy/sepolicy.mk
 BOARD_SEPOLICY_DIRS += $(DEVICE_PATH)/sepolicy/vendor
 #SELINUX_IGNORE_NEVERALLOWS := true
 
