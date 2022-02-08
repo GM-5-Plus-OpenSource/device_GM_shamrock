@@ -44,22 +44,6 @@ persist.audio.calfile4=/vendor/etc/acdbdata/MTP/MTP_Hdmi_cal.acdb
 persist.audio.calfile5=/vendor/etc/acdbdata/MTP/MTP_Headset_cal.acdb
 persist.audio.calfile6=/vendor/etc/acdbdata/MTP/MTP_Speaker_cal.acdb
 
-# Display
-debug.egl.hw=0
-debug.enable.sglscale=1
-debug.gralloc.gfx_ubwc_disable=0
-debug.sf.enable_hwc_vds=1
-debug.sf.hw=0
-ro.opengles.version=196608
-debug.sf.latch_unsignaled=1
-debug.sf.recomputecrop=0
-dev.pm.dyn_samplingrate=1
-persist.hwc.mdpcomp.enable=true
-vendor.display.disable_rotator_split=1
-vendor.display.disable_skip_validate=1
-vendor.display.perf_hint_window=50
-vendor.gralloc.enable_fb_ubwc=1
-
 # Dalvik Heap
 dalvik.vm.heapstartsize=16m
 dalvik.vm.heapgrowthlimit=256m
@@ -69,14 +53,24 @@ dalvik.vm.heapminfree=4m
 dalvik.vm.heapmaxfree=8m
 
 # Display
-ro.sf.hwc_set_default_colormode=true
+debug.hwui.use_buffer_age=false
+debug.sf.disable_backpressure=1
+debug.sf.hw=0
+debug.sf.latch_unsignaled=1
+debug.sf.use_phase_offsets_as_durations=1
+persist.demo.hdmirotationlock=false
+ro.hardware.egl=adreno
+ro.opengles.version=196608
+vendor.display.disable_skip_validate=1
 ro.vendor.display.cabl=0
+sdm.debug.disable_skip_validate=1
+vendor.display.disable_skip_validate=1
 vendor.display.enable_default_color_mode=1
+vendor.gralloc.enable_fb_ubwc=1
+video.accelerate.hw=1
 
-ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
-ro.surface_flinger.max_frame_buffer_acquired_buffers=3
-ro.surface_flinger.max_virtual_display_dimension=4096
-ro.surface_flinger.use_color_management=true
+debug.sf.disable_hwc_vds=1
+persist.hwc.enable_vds=1
 
 # Perf
 ro.sys.fw.dex2oat_thread_count=8
@@ -142,7 +136,7 @@ bluetooth.hfp.client=1
 qcom.bluetooth.soc=smd
 ro.bluetooth.hfp.ver=1.7
 ro.qualcomm.bt.hci_transport=smd
-	
+
 # Wifi
 wifi.interface=wlan0
 
@@ -153,6 +147,7 @@ ro.vendor.qti.sys.fw.bservice_enable=true
 ro.sys.fw.dex2oat_thread_count=8
 ro.vendor.extension_library=libqti-perfd-client.so
 ro.vendor.qti.sys.fw.bg_apps_limit=60
+vendor.perf.gestureflingboost.enable=true
 
 # Camera
 camera.display.lmax=1280x720
@@ -185,6 +180,15 @@ ro.hwui.text_small_cache_width=1024
 ro.hwui.text_small_cache_height=1024
 ro.hwui.text_large_cache_width=2048
 ro.hwui.text_large_cache_height=2048
+
+# Surfaceflinger
+debug.sf.latch_unsignaled=1
+debug.sf.disable_backpressure=1
+debug.sf.enable_gl_backpressure=1
+ro.surface_flinger.protected_contents=true
+ro.surface_flinger.force_hwc_copy_for_virtual_displays=true
+ro.surface_flinger.max_virtual_display_dimension=4096
+ro.surface_flinger.max_frame_buffer_acquired_buffers=3
 
 # Trim properties
 ro.vendor.qti.sys.fw.use_trim_settings=true
