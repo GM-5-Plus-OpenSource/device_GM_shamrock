@@ -633,5 +633,15 @@ service vendor.power_off_alarm /vendor/bin/power_off_alarm
     disabled
     oneshot
 	
+on boot
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu5/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu6/cpufreq/scaling_governor "interactive"
+    write /sys/devices/system/cpu/cpu7/cpufreq/scaling_governor "interactive"
+
 on property:apexd.status=ready
     mount none /vendor/etc/swcodec/ld.config.txt /apex/com.android.media.swcodec/etc/ld.config.txt bind
