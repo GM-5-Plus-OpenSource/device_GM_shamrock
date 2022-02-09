@@ -123,6 +123,12 @@ ro.telephony.default_network=22,22
 ro.telephony.iwlan_operation_mode=legacy
 service.qti.ims.enabled=1
 
+# Disable IMS Logging
+persist.ims.disableADBLogs=1
+persist.ims.disableDebugLogs=1
+persist.ims.disableIMSLogs=1
+persist.ims.disableQXDMLogs=1
+
 # Enabling ADB
 ro.secure=0
 ro.adb.secure=0
