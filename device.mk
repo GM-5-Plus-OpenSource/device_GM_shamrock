@@ -324,17 +324,11 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     fstab.qcom \
     init.qcom.rc \
-    init.cts.rc \
-    init.qcom.rc \
     init.target.rc \
     init.qcom.usb.rc \
     ueventd.qcom.rc
 
 PRODUCT_PACKAGES += \
-	init.class_main.sh \
-	init.qcom.class_core.sh \
-	init.qcom.crashdata.sh \
-    init.qcom.early_boot.sh \
     init.qcom.post_boot.sh \
     init.qcom.sh
 
