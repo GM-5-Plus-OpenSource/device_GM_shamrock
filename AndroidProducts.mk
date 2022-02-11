@@ -15,4 +15,4 @@
 #
 
 PRODUCT_MAKEFILES := \
-    $(LOCAL_DIR)/potato_shamrock.mk
+    $(LOCAL_DIR)/lineage_shamrock.mk
