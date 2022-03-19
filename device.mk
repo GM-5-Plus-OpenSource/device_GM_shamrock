@@ -324,6 +324,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.graphics.vulkan.disable=true
 
+# Disable rescue party
+PRODUCT_PROPERTY_OVERRIDES += \
+    persist.sys.disable_rescue=true
+
 # Rootdir
 PRODUCT_PACKAGES += \
     fstab.qcom \
