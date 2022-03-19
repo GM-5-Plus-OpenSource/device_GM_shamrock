@@ -592,4 +592,7 @@
          strictly needed. -->
     <bool name="config_sf_limitedAlpha">true</bool>			
 
+    <!-- Device supports Sustained Performance Mode-->
+    <bool name="config_sustainedPerformanceModeSupported">true</bool>
+
 </resources>
