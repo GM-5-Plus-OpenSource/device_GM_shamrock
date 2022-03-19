@@ -328,6 +328,25 @@ PRODUCT_PROPERTY_OVERRIDES += \
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.disable_rescue=true
 
+# Releasetools
+TARGET_RELEASETOOLS_EXTENSIONS := device/GM/shamrock
+
+# Oreo Firmware
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/firmware/adspso.img:install/firmware-update/adspso.img \
+    $(LOCAL_PATH)/firmware/cmnlib.mbn:install/firmware-update/cmnlib.mbn \
+    $(LOCAL_PATH)/firmware/devinfo.bin:install/firmware-update/devinfo.bin \
+    $(LOCAL_PATH)/firmware/dsp.img:install/firmware-update/dsp.img \
+    $(LOCAL_PATH)/firmware/emmc_appsboot.mbn:install/firmware-update/emmc_appsboot.mbn \
+    $(LOCAL_PATH)/firmware/hyp.mbn:install/firmware-update/hyp.mbn \
+    $(LOCAL_PATH)/firmware/keymaster.mbn:install/firmware-update/keymaster.mbn \
+    $(LOCAL_PATH)/firmware/mdtp.img:install/firmware-update/mdtp.img \
+    $(LOCAL_PATH)/firmware/NON-HLOS.bin:install/firmware-update/NON-HLOS.bin \
+    $(LOCAL_PATH)/firmware/rpm.img:install/firmware-update/rpm.img \
+    $(LOCAL_PATH)/firmware/sbl1.img:install/firmware-update/sbl1.img \
+    $(LOCAL_PATH)/firmware/splash.img:install/firmware-update/splash.img \
+    $(LOCAL_PATH)/firmware/tz.img:install/firmware-update/tz.img
+
 # Rootdir
 PRODUCT_PACKAGES += \
     fstab.qcom \
