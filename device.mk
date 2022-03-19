@@ -320,6 +320,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     vndk-sp
 
+# Disable Vulkan
+PRODUCT_PROPERTY_OVERRIDES += \
+    persist.graphics.vulkan.disable=true
+
 # Rootdir
 PRODUCT_PACKAGES += \
     fstab.qcom \
