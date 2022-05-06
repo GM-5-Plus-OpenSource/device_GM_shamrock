@@ -370,6 +370,10 @@ PRODUCT_PACKAGES += \
     ims-ext-common \
     ims_ext_common.xml
 
+# IMS Shim
+PRODUCT_PACKAGES += \
+    libbase_shim
+
 # Wifi
 PRODUCT_PACKAGES += \
     android.hardware.wifi@1.0-service \
