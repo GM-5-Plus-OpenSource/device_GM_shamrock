@@ -29,10 +29,6 @@ DEVICE_PACKAGE_OVERLAYS += \
 PRODUCT_ENFORCE_RRO_TARGETS := \
     framework-res
 
-#Soong
-PRODUCT_BOARD_PLATFORM := msm8952
-PRODUCT_USES_QCOM_HARDWARE := true
-
 # Permissions
 PRODUCT_COPY_FILES += \
     external/ant-wireless/antradio-library/com.dsi.ant.antradio_library.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/com.dsi.ant.antradio_library.xml \
@@ -75,14 +71,7 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.audio@2.0-impl \
     android.hardware.audio@2.0-service \
-    android.hardware.audio@5.0 \
-    android.hardware.audio@5.0-impl \
-    android.hardware.audio.common@5.0 \
-    android.hardware.audio.common@5.0-util \
-    android.hardware.audio.effect@5.0 \
-    android.hardware.audio.effect@5.0-impl \
-    android.hardware.soundtrigger@2.2-impl \
-    android.hardware.soundtrigger@2.2-service \
+    android.hardware.audio.effect@2.0-impl \
     audio.primary.msm8952 \
     audio.a2dp.default \
     audio.r_submix.default \
@@ -127,7 +116,6 @@ PRODUCT_PACKAGES += \
     android.hardware.camera.common@1.0 \
     android.hardware.camera.provider@2.4-impl \
     android.hardware.camera.provider@2.4-service \
-    android.hardware.camera.provider@2.5 \
     Camera2 \
     libmm-qcamera \
     libqomx_core
@@ -154,10 +142,6 @@ PRODUCT_PACKAGES += \
     libqdMetaData.system \
     libgenlock \
     libtinyxml
-
-# Doze
-PRODUCT_PACKAGES += \
-    Doze
 
 # DRM
 PRODUCT_PACKAGES += \
@@ -243,10 +227,7 @@ PRODUCT_PACKAGES += \
 
 # Perf
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/perf/perfboostsconfig.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/perfboostsconfig.xml \
-    $(LOCAL_PATH)/configs/perf/lm/AdaptLaunchFeature.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/lm/AdaptLaunchFeature.xml \
-    $(LOCAL_PATH)/configs/perf/targetconfig.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/targetconfig.xml \
-    $(LOCAL_PATH)/configs/perf/targetresourceconfigs.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/targetresourceconfigs.xml
+    $(LOCAL_PATH)/configs/perf/perfboostsconfig.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/perfboostsconfig.xml
 
 # Protobuf
 PRODUCT_COPY_FILES += \
@@ -288,8 +269,9 @@ PRODUCT_COPY_FILES += \
 
 # Thermal
 PRODUCT_PACKAGES += \
-    android.hardware.thermal@2.0-service.mock \
-    thermal.msm8952
+    thermal.msm8952 \
+    android.hardware.thermal@1.0-impl \
+    android.hardware.thermal@1.0-service
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/thermal-engine.conf:$(TARGET_COPY_OUT_VENDOR)/etc/thermal-engine.conf
@@ -321,10 +303,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     vndk-sp
 
-# Disable Vulkan
-PRODUCT_PROPERTY_OVERRIDES += \
-    persist.graphics.vulkan.disable=true
-
 # Disable rescue party
 PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.disable_rescue=true
@@ -338,7 +316,6 @@ PRODUCT_PACKAGES += \
     ueventd.qcom.rc
 
 PRODUCT_PACKAGES += \
-    init.qcom.post_boot.sh \
     init.qcom.sh
 
 # Offline charger
