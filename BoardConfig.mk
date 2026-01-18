@@ -99,12 +99,6 @@ WITH_DEXPREOPT_BOOT_IMG_AND_SYSTEM_SERVER_ONLY ?= true
 # temp disable encryption 
 #TARGET_HW_DISK_ENCRYPTION := true
 
-#add gnss flags to test if GPS functions are working#
-BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE := $(TARGET_BOARD_PLATFORM)
-USE_DEVICE_SPECIFIC_GPS := true
-USE_DEVICE_SPECIFIC_LOC_API := true
-TARGET_NO_RPC := true
-
 # Cpusets
 ENABLE_CPUSETS := true
 
@@ -176,6 +170,7 @@ TARGET_PER_MGR_ENABLED := true
 # Power
 TARGET_HAS_NO_WLAN_STATS := true
 TARGET_USES_INTERACTION_BOOST := true
+BOARD_POWER_CUSTOM_BOARD_LIB := libpower_shamrock
 
 # Qualcomm Hardware
 BOARD_USES_QCOM_HARDWARE := true

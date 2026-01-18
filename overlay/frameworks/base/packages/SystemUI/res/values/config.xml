@@ -22,4 +22,8 @@
 <resources>
     <!-- Doze: does this device support STATE_DOZE and STATE_DOZE_SUSPEND?  -->
     <bool name="doze_display_state_supported">true</bool>
+    <!-- QS / Notification blur tamamen kapalı -->
+    <bool name="config_enableNotificationShadeBlur">false</bool>
+    <bool name="config_enableQsBlur">false</bool>
+    <bool name="config_use_blur">false</bool>
 </resources>
