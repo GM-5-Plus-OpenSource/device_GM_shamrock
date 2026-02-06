@@ -1,1 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?><resources>    <!-- QS / Notification arkası tamamen siyah -->    <color name="scrim_behind">#FF000000</color>    <color name="scrim_notifications">#FF000000</color>    <color name="qs_scrim">#FF000000</color></resources>

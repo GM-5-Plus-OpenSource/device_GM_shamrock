@@ -350,6 +350,11 @@ on property:sys.boot_completed=1
 	write /sys/devices/system/cpu/cpu5/cpufreq/scaling_governor interactive
 	write /sys/devices/system/cpu/cpu6/cpufreq/scaling_governor interactive
 	write /sys/devices/system/cpu/cpu7/cpufreq/scaling_governor interactive
+	
+	# mutlaka online kalmalı cpu1-2-3
+	write /sys/devices/system/cpu/cpu1/online 1
+    write /sys/devices/system/cpu/cpu2/online 1
+    write /sys/devices/system/cpu/cpu3/online 1
 
     # Scheduler: reduce task bouncing / improve UI smoothness
     write /proc/sys/kernel/sched_migration_cost_ns 500000
@@ -361,11 +366,29 @@ on property:sys.boot_completed=1
     write /sys/block/mmcblk0/queue/read_ahead_kb 1024
     write /sys/block/mmcblk0/queue/nr_requests 128
 
-    # Cpuset: keep background from polluting all cores
-    write /dev/cpuset/background/cpus 0-3
-    write /dev/cpuset/system-background/cpus 0-3
+    # Root cpuset
+    write /dev/cpuset/cpus 0-7
+    write /dev/cpuset/mems 0
+
+    # Foreground: all cores
     write /dev/cpuset/foreground/cpus 0-7
+    write /dev/cpuset/foreground/mems 0
+
+    # Top-app: BIG cores only (UI / games / active app)
     write /dev/cpuset/top-app/cpus 0-7
+    write /dev/cpuset/top-app/mems 0
+
+    # Background apps: LITTLE cores
+    write /dev/cpuset/background/cpus 4-7
+    write /dev/cpuset/background/mems 0
+
+    # System background services: LITTLE cores
+    write /dev/cpuset/system-background/cpus 4-7
+    write /dev/cpuset/system-background/mems 0
+
+    # Restricted: LITTLE cores only (IMPORTANT)
+    write /dev/cpuset/restricted/cpus 5-7
+    write /dev/cpuset/restricted/mems 0
 
 on property:vold.decrypt=trigger_restart_framework
     start config_bt_addr

@@ -29,10 +29,12 @@
  */
 
 #define LOG_NIDEBUG 0
+#define LOG_TAG "AgressivePowerHAL : CALGICI KARISI BINNAZ"
 
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -40,7 +42,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define LOG_TAG "AgressivePowerHAL : CALGICI KARISI BINNAZ"
 #include <hardware/hardware.h>
 #include <hardware/power.h>
 #include <log/log.h>
@@ -51,32 +52,44 @@
 #include "power-common.h"
 #include "utils.h"
 
+// -----------------------------------------------------------------------------
+// perfd-less boosts (cpu_boost + KGSL)
+// Aggressive UI smoothness: boost CPU floors + sched_boost_on_input + GPU max perf
+// -----------------------------------------------------------------------------
+//
+// Device mapping (per your device):
+// - Big:    cpu0-3  (max 1516800)
+// - Little: cpu4-7  (max 1209600)
+// GPU:
+// - pwrlevel: 0 fastest, 4 slowest
+//
+// We do timed boost with restore using generation counter to avoid races.
 
-// --- perfd-less boosts (cpu_boost + KGSL) ---
-// We keep this HAL aggressive but aligned with the kernel tweaks:
-// - Extend cpu_boost floors for INTERACTION/LAUNCH
-// - Force GPU to max perf briefly via min_pwrlevel
+static const char* kCpuBoostMsPath        = "/sys/module/cpu_boost/parameters/input_boost_ms";
+static const char* kCpuBoostFreqPath      = "/sys/module/cpu_boost/parameters/input_boost_freq";
+static const char* kSchedBoostOnInputPath = "/sys/module/cpu_boost/parameters/sched_boost_on_input";
 
-#include <fcntl.h>
-#include <pthread.h>
-#include <string.h>
+// GPU path variants (we auto-pick the one that exists)
+static const char* kGpuMinPwrlevelPathA = "/sys/class/kgsl/kgsl-3d0/min_pwrlevel";
+static const char* kGpuMinPwrlevelPathB =
+    "/sys/devices/soc.0/1c00000.qcom,kgsl-3d0/kgsl/kgsl-3d0/min_pwrlevel";
 
-static const char* kCpuBoostMsPath   = "/sys/module/cpu_boost/parameters/input_boost_ms";
-static const char* kCpuBoostFreqPath = "/sys/module/cpu_boost/parameters/input_boost_freq";
-static const char* kGpuMinPwrlevelPath = "/sys/class/kgsl/kgsl-3d0/min_pwrlevel";
+static const char* gGpuMinPwrlevelPath = NULL;
 
 static pthread_mutex_t g_boost_lock = PTHREAD_MUTEX_INITIALIZER;
 static long long g_boost_gen = 0;
 
-static int g_def_cpu_boost_ms = -1;
-static char g_def_cpu_boost_freq[192] = {0};
-static int g_def_gpu_min_pwrlevel = -1;
+// Cached defaults (read once, restored after each timed boost)
+static int  g_def_cpu_boost_ms = -1;
+static char g_def_cpu_boost_freq[256] = {0};
+static int  g_def_sched_boost_on_input = -1;
+static int  g_def_gpu_min_pwrlevel = -1;
 
 static int read_int(const char* path, int* out) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
     char buf[64];
-    int n = (int)read(fd, buf, sizeof(buf)-1);
+    int n = (int)read(fd, buf, sizeof(buf) - 1);
     close(fd);
     if (n <= 0) return -1;
     buf[n] = '\0';
@@ -87,7 +100,7 @@ static int read_int(const char* path, int* out) {
 static int read_str(const char* path, char* out, size_t out_sz) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
-    int n = (int)read(fd, out, out_sz-1);
+    int n = (int)read(fd, out, out_sz - 1);
     close(fd);
     if (n <= 0) return -1;
     out[n] = '\0';
@@ -110,16 +123,73 @@ static int write_str_file(const char* path, const char* s) {
     return 0;
 }
 
+static const char* pick_gpu_path_once() {
+    // Prefer /sys/class if it exists, else fall back to the SoC path.
+    if (access(kGpuMinPwrlevelPathA, F_OK) == 0) return kGpuMinPwrlevelPathA;
+    if (access(kGpuMinPwrlevelPathB, F_OK) == 0) return kGpuMinPwrlevelPathB;
+    return NULL;
+}
+
 static void cache_defaults_locked() {
-    if (g_def_cpu_boost_ms == -1) (void)read_int(kCpuBoostMsPath, &g_def_cpu_boost_ms);
-    if (g_def_cpu_boost_freq[0] == '\0') (void)read_str(kCpuBoostFreqPath, g_def_cpu_boost_freq, sizeof(g_def_cpu_boost_freq));
-    if (g_def_gpu_min_pwrlevel == -1) (void)read_int(kGpuMinPwrlevelPath, &g_def_gpu_min_pwrlevel);
+    if (!gGpuMinPwrlevelPath) {
+        gGpuMinPwrlevelPath = pick_gpu_path_once();
+        if (!gGpuMinPwrlevelPath) {
+            ALOGW("GPU min_pwrlevel path not found (no KGSL node?)");
+        } else {
+            ALOGI("Using GPU min_pwrlevel path: %s", gGpuMinPwrlevelPath);
+        }
+    }
+
+    if (g_def_cpu_boost_ms == -1) {
+        if (read_int(kCpuBoostMsPath, &g_def_cpu_boost_ms) != 0) {
+            ALOGW("Failed to read default input_boost_ms");
+        }
+    }
+    if (g_def_cpu_boost_freq[0] == '\0') {
+        if (read_str(kCpuBoostFreqPath, g_def_cpu_boost_freq, sizeof(g_def_cpu_boost_freq)) != 0) {
+            ALOGW("Failed to read default input_boost_freq");
+        }
+    }
+    if (g_def_sched_boost_on_input == -1) {
+        if (read_int(kSchedBoostOnInputPath, &g_def_sched_boost_on_input) != 0) {
+            ALOGW("Failed to read default sched_boost_on_input");
+        }
+    }
+    if (g_def_gpu_min_pwrlevel == -1 && gGpuMinPwrlevelPath) {
+        if (read_int(gGpuMinPwrlevelPath, &g_def_gpu_min_pwrlevel) != 0) {
+            ALOGW("Failed to read default gpu min_pwrlevel");
+        }
+    }
 }
 
 static void restore_defaults_locked() {
-    if (g_def_cpu_boost_freq[0] != '\0') (void)write_str_file(kCpuBoostFreqPath, g_def_cpu_boost_freq);
-    if (g_def_cpu_boost_ms > 0) (void)write_int(kCpuBoostMsPath, g_def_cpu_boost_ms);
-    if (g_def_gpu_min_pwrlevel >= 0) (void)write_int(kGpuMinPwrlevelPath, g_def_gpu_min_pwrlevel);
+    // Restore CPU boost freq
+    if (g_def_cpu_boost_freq[0] != '\0') {
+        if (write_str_file(kCpuBoostFreqPath, g_def_cpu_boost_freq) != 0) {
+            ALOGW("Failed to restore input_boost_freq");
+        }
+    }
+
+    // Restore CPU boost ms (restore even if 0)
+    if (g_def_cpu_boost_ms >= 0) {
+        if (write_int(kCpuBoostMsPath, g_def_cpu_boost_ms) != 0) {
+            ALOGW("Failed to restore input_boost_ms");
+        }
+    }
+
+    // Restore sched_boost_on_input
+    if (g_def_sched_boost_on_input >= 0) {
+        if (write_int(kSchedBoostOnInputPath, g_def_sched_boost_on_input) != 0) {
+            ALOGW("Failed to restore sched_boost_on_input");
+        }
+    }
+
+    // Restore GPU min_pwrlevel
+    if (g_def_gpu_min_pwrlevel >= 0 && gGpuMinPwrlevelPath) {
+        if (write_int(gGpuMinPwrlevelPath, g_def_gpu_min_pwrlevel) != 0) {
+            ALOGW("Failed to restore GPU min_pwrlevel");
+        }
+    }
 }
 
 struct restore_args {
@@ -129,27 +199,61 @@ struct restore_args {
 
 static void* restore_thread(void* arg) {
     struct restore_args* a = (struct restore_args*)arg;
-    usleep(a->delay_ms * 1000);
+    usleep((useconds_t)a->delay_ms * 1000);
+
     pthread_mutex_lock(&g_boost_lock);
     if (a->gen == g_boost_gen) {
         cache_defaults_locked();
         restore_defaults_locked();
     }
     pthread_mutex_unlock(&g_boost_lock);
+
     free(a);
     return NULL;
 }
 
-static void apply_boost_timed(const char* cpu_freq_str, int cpu_boost_ms, int gpu_min_pwrlevel, int duration_ms) {
+// Timed boost apply:
+// - cpu_freq_str: written to input_boost_freq
+// - cpu_boost_ms: written to input_boost_ms
+// - sched_boost_on_input: 1 during boost (aggressive scheduler boost)
+// - gpu_min_pwrlevel: 0 = max perf, higher = lower perf
+// - duration_ms: after this we restore defaults (if no newer boost)
+static void apply_boost_timed(const char* cpu_freq_str,
+                             int cpu_boost_ms,
+                             int sched_boost_on_input,
+                             int gpu_min_pwrlevel,
+                             int duration_ms) {
     pthread_mutex_lock(&g_boost_lock);
     cache_defaults_locked();
 
     g_boost_gen++;
     long long mygen = g_boost_gen;
 
-    (void)write_str_file(kCpuBoostFreqPath, cpu_freq_str);
-    (void)write_int(kCpuBoostMsPath, cpu_boost_ms);
-    (void)write_int(kGpuMinPwrlevelPath, gpu_min_pwrlevel);
+    // CPU boost knobs
+    if (cpu_freq_str && cpu_freq_str[0]) {
+        if (write_str_file(kCpuBoostFreqPath, cpu_freq_str) != 0) {
+            ALOGW("Failed to write input_boost_freq");
+        }
+    }
+    if (cpu_boost_ms >= 0) {
+        if (write_int(kCpuBoostMsPath, cpu_boost_ms) != 0) {
+            ALOGW("Failed to write input_boost_ms");
+        }
+    }
+
+    // Scheduler boost on input (aggressive)
+    if (sched_boost_on_input >= 0) {
+        if (write_int(kSchedBoostOnInputPath, sched_boost_on_input) != 0) {
+            ALOGW("Failed to write sched_boost_on_input");
+        }
+    }
+
+    // GPU boost (if node exists)
+    if (gGpuMinPwrlevelPath && gpu_min_pwrlevel >= 0) {
+        if (write_int(gGpuMinPwrlevelPath, gpu_min_pwrlevel) != 0) {
+            ALOGW("Failed to write GPU min_pwrlevel");
+        }
+    }
 
     pthread_mutex_unlock(&g_boost_lock);
 
@@ -173,6 +277,10 @@ static void restore_now() {
     restore_defaults_locked();
     pthread_mutex_unlock(&g_boost_lock);
 }
+
+// -----------------------------------------------------------------------------
+// Existing QCOM PowerHAL logic (profiles + video encode etc.)
+// -----------------------------------------------------------------------------
 
 static int video_encode_hint_sent;
 
@@ -276,7 +384,6 @@ static int process_video_encode_hint(void* metadata) {
         return HINT_NONE;
     }
 
-    /* Initialize encode metadata struct fields */
     memset(&video_encode_metadata, 0, sizeof(struct video_encode_metadata_t));
     video_encode_metadata.state = -1;
     video_encode_metadata.hint_id = DEFAULT_VIDEO_ENCODE_HINT_ID;
@@ -288,12 +395,14 @@ static int process_video_encode_hint(void* metadata) {
 
     if (video_encode_metadata.state == 1) {
         if (is_interactive_governor(governor)) {
-            int resource_values[] = {INT_OP_CLUSTER0_USE_SCHED_LOAD,      0x1,
-                                     INT_OP_CLUSTER1_USE_SCHED_LOAD,      0x1,
-                                     INT_OP_CLUSTER0_USE_MIGRATION_NOTIF, 0x1,
-                                     INT_OP_CLUSTER1_USE_MIGRATION_NOTIF, 0x1,
-                                     INT_OP_CLUSTER0_TIMER_RATE,          BIG_LITTLE_TR_MS_40,
-                                     INT_OP_CLUSTER1_TIMER_RATE,          BIG_LITTLE_TR_MS_40};
+            int resource_values[] = {
+                INT_OP_CLUSTER0_USE_SCHED_LOAD,      0x1,
+                INT_OP_CLUSTER1_USE_SCHED_LOAD,      0x1,
+                INT_OP_CLUSTER0_USE_MIGRATION_NOTIF, 0x1,
+                INT_OP_CLUSTER1_USE_MIGRATION_NOTIF, 0x1,
+                INT_OP_CLUSTER0_TIMER_RATE,          BIG_LITTLE_TR_MS_40,
+                INT_OP_CLUSTER1_TIMER_RATE,          BIG_LITTLE_TR_MS_40
+            };
             perform_hint_action(video_encode_metadata.hint_id, resource_values,
                                 ARRAY_SIZE(resource_values));
             return HINT_HANDLED;
@@ -308,29 +417,36 @@ static int process_video_encode_hint(void* metadata) {
     return HINT_NONE;
 }
 
+// -----------------------------------------------------------------------------
+// Aggressive Interaction / Launch overrides (max smoothness)
+// -----------------------------------------------------------------------------
+
 static void process_interaction_hint(void* data) {
     (void)data;
-    // Aggressive INTERACTION boost for QS/scroll on low-end:
-    // - CPU: raise LITTLE floor to reduce input latency
-    // - GPU: force max perf via min_pwrlevel=0 (550MHz on this device)
+    // MAX smoothness preset:
+    // - Big (0-3) floor to 1516800
+    // - Little (4-7) floor to 1209600
+    // - sched_boost_on_input=1 during boost
+    // - GPU min_pwrlevel=0 (max perf)
     apply_boost_timed(
-        "0:1401600 1:0 2:0 3:0 4:1516800 5:0 6:0 7:0",
+        "0:1516800 1:1516800 2:1516800 3:1516800 4:1209600 5:1209600 6:1209600 7:1209600",
         700,  // input_boost_ms
-        0,    // min_pwrlevel
-        700   // duration
+        1,    // sched_boost_on_input
+        0,    // GPU min_pwrlevel
+        650   // duration
     );
 }
-
 
 static int process_activity_launch_hint(void* data) {
     // Frameworks typically send (int*)1 on launch start and (int*)0 or NULL on end.
     int start = (data && *((int*)data) == 1);
     if (start) {
         apply_boost_timed(
-            "0:1401600 1:0 2:0 3:0 4:1516800 5:0 6:0 7:0",
-            1200,
-            0,
-            1200
+            "0:1516800 1:1516800 2:1516800 3:1516800 4:1209600 5:1209600 6:1209600 7:1209600",
+            1600, // input_boost_ms
+            1,    // sched_boost_on_input
+            0,    // GPU min_pwrlevel
+            1300  // duration
         );
     } else {
         restore_now();
@@ -338,6 +454,9 @@ static int process_activity_launch_hint(void* data) {
     return HINT_HANDLED;
 }
 
+// -----------------------------------------------------------------------------
+// Hooks used by framework
+// -----------------------------------------------------------------------------
 
 int power_hint_override(power_hint_t hint, void* data) {
     int ret_val = HINT_NONE;
@@ -371,12 +490,9 @@ int power_hint_override(power_hint_t hint, void* data) {
 }
 
 int set_interactive_override(int on) {
-    // Keep display-state handling simple for this kernel:
-    // - When screen turns off, drop any active boosts and restore defaults.
-    // - When screen turns on, do nothing special (interaction hints will re-boost).
+    // When screen turns off, drop any active boosts and restore defaults.
     if (!on) {
         restore_now();
     }
     return HINT_HANDLED;
 }
-
