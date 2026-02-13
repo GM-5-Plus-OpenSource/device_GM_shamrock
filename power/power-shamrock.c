@@ -1,40 +1,18 @@
 /*
- * YANIK
- * SIKERIM
+ * AgressivePowerHAL ver. 1
+ * yigityanik
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- * *    * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *     * Neither the name of The Linux Foundation nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #define LOG_NIDEBUG 0
-#define LOG_TAG "AgressivePowerHAL : CALGICI KARISI BINNAZ"
+#define LOG_TAG "AgressivePowerHALrelease : "
 
 #include <dlfcn.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdio.h>   // snprintf
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -56,18 +34,17 @@
 // perfd-less boosts (cpu_boost + KGSL)
 // Aggressive UI smoothness: boost CPU floors + sched_boost_on_input + GPU max perf
 // -----------------------------------------------------------------------------
-//
-// Device mapping (per your device):
-// - Big:    cpu0-3  (max 1516800)
-// - Little: cpu4-7  (max 1209600)
-// GPU:
-// - pwrlevel: 0 fastest, 4 slowest
-//
-// We do timed boost with restore using generation counter to avoid races.
 
-static const char* kCpuBoostMsPath        = "/sys/module/cpu_boost/parameters/input_boost_ms";
-static const char* kCpuBoostFreqPath      = "/sys/module/cpu_boost/parameters/input_boost_freq";
-static const char* kSchedBoostOnInputPath = "/sys/module/cpu_boost/parameters/sched_boost_on_input";
+static const char* kCpuBoostMsPath   = "/sys/module/cpu_boost/parameters/input_boost_ms";
+static const char* kCpuBoostFreqPath = "/sys/module/cpu_boost/parameters/input_boost_freq";
+
+// Sched boost: fallback chain
+static const char* kSchedBoostPaths[] = {
+    "/sys/module/cpu_boost/parameters/sched_boost_on_input",  // often expects "Y"/"N"
+    "/proc/sys/kernel/sched_boost",                            // expects "1"/"0"
+    NULL,
+};
+static const char* gSchedBoostPath = NULL;
 
 // GPU path variants (we auto-pick the one that exists)
 static const char* kGpuMinPwrlevelPathA = "/sys/class/kgsl/kgsl-3d0/min_pwrlevel";
@@ -79,55 +56,296 @@ static const char* gGpuMinPwrlevelPath = NULL;
 static pthread_mutex_t g_boost_lock = PTHREAD_MUTEX_INITIALIZER;
 static long long g_boost_gen = 0;
 
+// Optional self-disable to avoid spam if writes are denied on device
+static int g_gpu_boost_disabled = 0;
+static int g_cpu_boost_disabled = 0;
+static int g_sched_boost_disabled = 0;
+
 // Cached defaults (read once, restored after each timed boost)
 static int  g_def_cpu_boost_ms = -1;
 static char g_def_cpu_boost_freq[256] = {0};
-static int  g_def_sched_boost_on_input = -1;
+static int  g_def_sched_boost = -1;     // store 0/1 even if kernel expects Y/N
 static int  g_def_gpu_min_pwrlevel = -1;
 
-static int read_int(const char* path, int* out) {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0) return -1;
+// Auto-generated input_boost_freq based on cpufreq policy mapping
+static char g_auto_boost_freq[256] = {0};
+static int  g_auto_boost_ready = 0;
+
+// ---- forward decls (fix C99 implicit-decl errors) ----
+static int read_str(const char* path, char* out, size_t out_sz);
+static int read_int(const char* path, int* out);
+
+// Helpers
+static int is_cpu_boost_sched_param_path(const char* path) {
+    return path && (strstr(path, "/sys/module/cpu_boost/parameters/sched_boost_on_input") != NULL);
+}
+
+static void trim_ws(char* s) {
+    if (!s) return;
+    size_t n = strlen(s);
+    while (n > 0 && (s[n-1] == '\n' || s[n-1] == '\r' || s[n-1] == ' ' || s[n-1] == '\t'))
+        s[--n] = 0;
+    size_t i = 0;
+    while (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') i++;
+    if (i > 0) memmove(s, s + i, strlen(s + i) + 1);
+}
+
+static void ensure_newline(char* s, size_t cap) {
+    if (!s || cap == 0) return;
+    size_t n = strlen(s);
+    if (n == 0) return;
+    if (s[n-1] != '\n') {
+        if (n + 1 < cap) {
+            s[n] = '\n';
+            s[n+1] = '\0';
+        }
+    }
+}
+
+// Replace '\n' and '\r' for log readability (avoid broken log lines)
+static void sanitize_for_log(const char* in, char* out, size_t out_sz) {
+    if (!out || out_sz == 0) return;
+    if (!in) { out[0] = '\0'; return; }
+    size_t j = 0;
+    for (size_t i = 0; in[i] && j + 1 < out_sz; i++) {
+        char c = in[i];
+        if (c == '\n') {
+            if (j + 2 < out_sz) { out[j++]='\\'; out[j++]='n'; }
+            else break;
+        } else if (c == '\r') {
+            if (j + 2 < out_sz) { out[j++]='\\'; out[j++]='r'; }
+            else break;
+        } else {
+            out[j++] = c;
+        }
+    }
+    out[j] = '\0';
+}
+
+// Parse related_cpus formats like: "0 1 2 3" or "0-3 5-7"
+static int parse_cpu_list(const char* s, int* cpus, int max_cpus) {
+    if (!s || !cpus || max_cpus <= 0) return 0;
+    int n = 0;
+    const char* p = s;
+    while (*p && n < max_cpus) {
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+        if (!*p) break;
+
+        int a = -1, b = -1;
+        // try range a-b
+        if (sscanf(p, "%d-%d", &a, &b) == 2 && a >= 0 && b >= a) {
+            for (int v = a; v <= b && n < max_cpus; v++) cpus[n++] = v;
+        } else if (sscanf(p, "%d", &a) == 1 && a >= 0) {
+            cpus[n++] = a;
+        }
+
+        // advance to next token
+        while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') p++;
+    }
+    return n;
+}
+
+typedef struct {
+    int policy_id;
+    int cpus[16];
+    int cpu_count;
+    int max_freq;
+} policy_info_t;
+
+static int read_int_from_file(const char* path, int* out) {
+    if (!path || !out) return -EINVAL;
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -errno;
     char buf[64];
     int n = (int)read(fd, buf, sizeof(buf) - 1);
     close(fd);
-    if (n <= 0) return -1;
+    if (n <= 0) return -EIO;
     buf[n] = '\0';
     *out = atoi(buf);
     return 0;
 }
 
-static int read_str(const char* path, char* out, size_t out_sz) {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0) return -1;
-    int n = (int)read(fd, out, out_sz - 1);
-    close(fd);
-    if (n <= 0) return -1;
-    out[n] = '\0';
+static int collect_policies(policy_info_t* out, int max_pols) {
+    if (!out || max_pols <= 0) return 0;
+
+    DIR* d = opendir("/sys/devices/system/cpu/cpufreq");
+    if (!d) return 0;
+
+    int n = 0;
+    struct dirent* de;
+    while ((de = readdir(d)) != NULL && n < max_pols) {
+        if (strncmp(de->d_name, "policy", 6) != 0) continue;
+
+        int pid = atoi(de->d_name + 6);
+
+        char path[256];
+        char buf[512];
+
+        // related_cpus
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpufreq/%s/related_cpus", de->d_name);
+        if (read_str(path, buf, sizeof(buf)) != 0) continue;
+        trim_ws(buf);
+
+        int cpus[16];
+        int cpu_count = parse_cpu_list(buf, cpus, (int)(sizeof(cpus)/sizeof(cpus[0])));
+        if (cpu_count <= 0) continue;
+
+        // cpuinfo_max_freq
+        snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpufreq/%s/cpuinfo_max_freq", de->d_name);
+        int maxf = -1;
+        if (read_int_from_file(path, &maxf) != 0 || maxf <= 0) continue;
+
+        out[n].policy_id = pid;
+        out[n].cpu_count = cpu_count;
+        out[n].max_freq = maxf;
+        for (int i = 0; i < cpu_count; i++) out[n].cpus[i] = cpus[i];
+        n++;
+    }
+
+    closedir(d);
+    return n;
+}
+
+static int cmp_policy_by_maxfreq_desc(const void* a, const void* b) {
+    const policy_info_t* pa = (const policy_info_t*)a;
+    const policy_info_t* pb = (const policy_info_t*)b;
+    // big first
+    if (pa->max_freq > pb->max_freq) return -1;
+    if (pa->max_freq < pb->max_freq) return 1;
+    return pa->policy_id - pb->policy_id;
+}
+
+// Build input_boost_freq string by detecting which cpufreq policy is "big" or "little"
+// We simply use each policy's cpuinfo_max_freq as the boost floor for its CPUs.
+static int build_auto_input_boost_freq(char* out, size_t out_sz) {
+    if (!out || out_sz == 0) return -EINVAL;
+    out[0] = '\0';
+
+    policy_info_t pols[8];
+    int np = collect_policies(pols, (int)(sizeof(pols)/sizeof(pols[0])));
+    if (np <= 0) return -ENOENT;
+
+    qsort(pols, np, sizeof(pols[0]), cmp_policy_by_maxfreq_desc);
+
+    // Compose "cpu:freq cpu:freq ..." (keep order: big->little for readability)
+    size_t used = 0;
+    for (int i = 0; i < np; i++) {
+        for (int j = 0; j < pols[i].cpu_count; j++) {
+            char seg[32];
+            int len = snprintf(seg, sizeof(seg), "%d:%d%s",
+                               pols[i].cpus[j], pols[i].max_freq,
+                               (i == np - 1 && j == pols[i].cpu_count - 1) ? "" : " ");
+            if (len <= 0) continue;
+            if (used + (size_t)len + 2 >= out_sz) break;
+            memcpy(out + used, seg, (size_t)len);
+            used += (size_t)len;
+            out[used] = '\0';
+        }
+    }
+
+    // Add newline for kernel sysfs expectations (some nodes expect it)
+    if (used + 2 < out_sz) {
+        out[used++] = '\n';
+        out[used] = '\0';
+    }
     return 0;
 }
 
+static void ensure_auto_boost_string_locked() {
+    if (g_auto_boost_ready) return;
+    int rc = build_auto_input_boost_freq(g_auto_boost_freq, sizeof(g_auto_boost_freq));
+    if (rc != 0) {
+        ALOGW("Auto input_boost_freq build failed rc=%d; falling back to hardcoded mapping", rc);
+        g_auto_boost_freq[0] = '\0';
+    } else {
+        char logbuf[256];
+        sanitize_for_log(g_auto_boost_freq, logbuf, sizeof(logbuf));
+        ALOGI("Auto input_boost_freq => '%s'", logbuf);
+    }
+    g_auto_boost_ready = 1;
+}
+
 static int write_int(const char* path, int val) {
-    int fd = open(path, O_WRONLY);
-    if (fd < 0) return -1;
-    dprintf(fd, "%d", val);
+    int fd = open(path, O_WRONLY | O_CLOEXEC);
+    if (fd < 0) {
+        ALOGW("open(%s) failed: %s", path, strerror(errno));
+        return -errno;
+    }
+    char buf[32];
+    int len = snprintf(buf, sizeof(buf), "%d", val);
+    if (len < 0) {
+        close(fd);
+        return -EINVAL;
+    }
+    if (write(fd, buf, (size_t)len) < 0) {
+        ALOGW("write(%s) failed: %s", path, strerror(errno));
+        close(fd);
+        return -errno;
+    }
     close(fd);
     return 0;
 }
 
 static int write_str_file(const char* path, const char* s) {
-    int fd = open(path, O_WRONLY);
-    if (fd < 0) return -1;
-    (void)write(fd, s, strlen(s));
+    int fd = open(path, O_WRONLY | O_CLOEXEC);
+    if (fd < 0) {
+        ALOGW("open(%s) failed: %s", path, strerror(errno));
+        return -errno;
+    }
+    if (write(fd, s, strlen(s)) < 0) {
+        ALOGW("write(%s) failed: %s", path, strerror(errno));
+        close(fd);
+        return -errno;
+    }
     close(fd);
     return 0;
 }
 
 static const char* pick_gpu_path_once() {
-    // Prefer /sys/class if it exists, else fall back to the SoC path.
     if (access(kGpuMinPwrlevelPathA, F_OK) == 0) return kGpuMinPwrlevelPathA;
     if (access(kGpuMinPwrlevelPathB, F_OK) == 0) return kGpuMinPwrlevelPathB;
     return NULL;
+}
+
+static const char* pick_sched_boost_path_once() {
+    for (int i = 0; kSchedBoostPaths[i]; i++) {
+        if (access(kSchedBoostPaths[i], F_OK) == 0) return kSchedBoostPaths[i];
+    }
+    return NULL;
+}
+
+static int write_sched_boost_value(const char* path, int on) {
+    if (!path) return -EINVAL;
+    if (is_cpu_boost_sched_param_path(path)) {
+        return write_str_file(path, on ? "Y" : "N");
+    }
+    return write_int(path, on ? 1 : 0);
+}
+
+static void dump_state(const char* where) {
+    int ms = -1, sched = -1, gpu = -1;
+    char freq[256] = {0};
+
+    (void)read_int(kCpuBoostMsPath, &ms);
+    (void)read_str(kCpuBoostFreqPath, freq, sizeof(freq));
+    trim_ws(freq);
+
+    if (gSchedBoostPath) {
+        if (is_cpu_boost_sched_param_path(gSchedBoostPath)) {
+            char tmp[16] = {0};
+            if (read_str(gSchedBoostPath, tmp, sizeof(tmp)) == 0) {
+                trim_ws(tmp);
+                sched = (tmp[0] == 'Y' || tmp[0] == 'y' || tmp[0] == '1') ? 1 : 0;
+            }
+        } else {
+            (void)read_int(gSchedBoostPath, &sched);
+        }
+    }
+
+    if (gGpuMinPwrlevelPath) (void)read_int(gGpuMinPwrlevelPath, &gpu);
+
+    ALOGI("STATE[%s]: boost_ms=%d boost_freq='%s' sched_boost=%d gpu_min_pwrlevel=%d",
+          where, ms, freq, sched, gpu);
 }
 
 static void cache_defaults_locked() {
@@ -140,6 +358,15 @@ static void cache_defaults_locked() {
         }
     }
 
+    if (!gSchedBoostPath) {
+        gSchedBoostPath = pick_sched_boost_path_once();
+        if (!gSchedBoostPath) {
+            ALOGW("No sched boost path found (cpu_boost/proc missing?)");
+        } else {
+            ALOGI("Using sched boost path: %s", gSchedBoostPath);
+        }
+    }
+
     if (g_def_cpu_boost_ms == -1) {
         if (read_int(kCpuBoostMsPath, &g_def_cpu_boost_ms) != 0) {
             ALOGW("Failed to read default input_boost_ms");
@@ -148,11 +375,24 @@ static void cache_defaults_locked() {
     if (g_def_cpu_boost_freq[0] == '\0') {
         if (read_str(kCpuBoostFreqPath, g_def_cpu_boost_freq, sizeof(g_def_cpu_boost_freq)) != 0) {
             ALOGW("Failed to read default input_boost_freq");
+        } else {
+            trim_ws(g_def_cpu_boost_freq);
+            ensure_newline(g_def_cpu_boost_freq, sizeof(g_def_cpu_boost_freq));
         }
     }
-    if (g_def_sched_boost_on_input == -1) {
-        if (read_int(kSchedBoostOnInputPath, &g_def_sched_boost_on_input) != 0) {
-            ALOGW("Failed to read default sched_boost_on_input");
+    if (g_def_sched_boost == -1 && gSchedBoostPath) {
+        if (is_cpu_boost_sched_param_path(gSchedBoostPath)) {
+            char tmp[16] = {0};
+            if (read_str(gSchedBoostPath, tmp, sizeof(tmp)) == 0) {
+                trim_ws(tmp);
+                g_def_sched_boost = (tmp[0] == 'Y' || tmp[0] == 'y' || tmp[0] == '1') ? 1 : 0;
+            } else {
+                ALOGW("Failed to read default sched boost");
+            }
+        } else {
+            if (read_int(gSchedBoostPath, &g_def_sched_boost) != 0) {
+                ALOGW("Failed to read default sched boost");
+            }
         }
     }
     if (g_def_gpu_min_pwrlevel == -1 && gGpuMinPwrlevelPath) {
@@ -160,36 +400,58 @@ static void cache_defaults_locked() {
             ALOGW("Failed to read default gpu min_pwrlevel");
         }
     }
+
+    ensure_auto_boost_string_locked();
+    dump_state("cache_defaults");
+}
+
+static int should_disable_for_rc(int rc) {
+    switch (-rc) {
+        case ENOENT:
+        case ENODEV:
+        case EROFS:
+            return 1;
+        default:
+            return 0;
+    }
 }
 
 static void restore_defaults_locked() {
-    // Restore CPU boost freq
-    if (g_def_cpu_boost_freq[0] != '\0') {
-        if (write_str_file(kCpuBoostFreqPath, g_def_cpu_boost_freq) != 0) {
-            ALOGW("Failed to restore input_boost_freq");
+    dump_state("before_restore");
+
+    if (!g_cpu_boost_disabled && g_def_cpu_boost_freq[0] != '\0') {
+        int rc = write_str_file(kCpuBoostFreqPath, g_def_cpu_boost_freq);
+        if (rc != 0) {
+            ALOGW("Failed to restore input_boost_freq rc=%d", rc);
+            if (should_disable_for_rc(rc)) g_cpu_boost_disabled = 1;
         }
     }
 
-    // Restore CPU boost ms (restore even if 0)
-    if (g_def_cpu_boost_ms >= 0) {
-        if (write_int(kCpuBoostMsPath, g_def_cpu_boost_ms) != 0) {
-            ALOGW("Failed to restore input_boost_ms");
+    if (!g_cpu_boost_disabled && g_def_cpu_boost_ms >= 0) {
+        int rc = write_int(kCpuBoostMsPath, g_def_cpu_boost_ms);
+        if (rc != 0) {
+            ALOGW("Failed to restore input_boost_ms rc=%d", rc);
+            if (should_disable_for_rc(rc)) g_cpu_boost_disabled = 1;
         }
     }
 
-    // Restore sched_boost_on_input
-    if (g_def_sched_boost_on_input >= 0) {
-        if (write_int(kSchedBoostOnInputPath, g_def_sched_boost_on_input) != 0) {
-            ALOGW("Failed to restore sched_boost_on_input");
+    if (!g_sched_boost_disabled && g_def_sched_boost >= 0 && gSchedBoostPath) {
+        int rc = write_sched_boost_value(gSchedBoostPath, g_def_sched_boost);
+        if (rc != 0) {
+            ALOGW("Failed to restore sched boost rc=%d", rc);
+            if (should_disable_for_rc(rc)) g_sched_boost_disabled = 1;
         }
     }
 
-    // Restore GPU min_pwrlevel
-    if (g_def_gpu_min_pwrlevel >= 0 && gGpuMinPwrlevelPath) {
-        if (write_int(gGpuMinPwrlevelPath, g_def_gpu_min_pwrlevel) != 0) {
-            ALOGW("Failed to restore GPU min_pwrlevel");
+    if (!g_gpu_boost_disabled && g_def_gpu_min_pwrlevel >= 0 && gGpuMinPwrlevelPath) {
+        int rc = write_int(gGpuMinPwrlevelPath, g_def_gpu_min_pwrlevel);
+        if (rc != 0) {
+            ALOGW("Failed to restore GPU min_pwrlevel rc=%d", rc);
+            if (should_disable_for_rc(rc)) g_gpu_boost_disabled = 1;
         }
     }
+
+    dump_state("after_restore");
 }
 
 struct restore_args {
@@ -212,12 +474,6 @@ static void* restore_thread(void* arg) {
     return NULL;
 }
 
-// Timed boost apply:
-// - cpu_freq_str: written to input_boost_freq
-// - cpu_boost_ms: written to input_boost_ms
-// - sched_boost_on_input: 1 during boost (aggressive scheduler boost)
-// - gpu_min_pwrlevel: 0 = max perf, higher = lower perf
-// - duration_ms: after this we restore defaults (if no newer boost)
 static void apply_boost_timed(const char* cpu_freq_str,
                              int cpu_boost_ms,
                              int sched_boost_on_input,
@@ -229,32 +485,45 @@ static void apply_boost_timed(const char* cpu_freq_str,
     g_boost_gen++;
     long long mygen = g_boost_gen;
 
-    // CPU boost knobs
-    if (cpu_freq_str && cpu_freq_str[0]) {
-        if (write_str_file(kCpuBoostFreqPath, cpu_freq_str) != 0) {
-            ALOGW("Failed to write input_boost_freq");
+    dump_state("before_apply");
+
+    if (!g_cpu_boost_disabled) {
+        if (cpu_freq_str && cpu_freq_str[0]) {
+            char logbuf[256];
+            sanitize_for_log(cpu_freq_str, logbuf, sizeof(logbuf));
+            ALOGI("WRITE input_boost_freq => '%s'", logbuf);
+            int rc = write_str_file(kCpuBoostFreqPath, cpu_freq_str);
+            if (rc != 0) {
+                ALOGW("Failed to write input_boost_freq rc=%d", rc);
+                if (should_disable_for_rc(rc)) g_cpu_boost_disabled = 1;
+            }
         }
-    }
-    if (cpu_boost_ms >= 0) {
-        if (write_int(kCpuBoostMsPath, cpu_boost_ms) != 0) {
-            ALOGW("Failed to write input_boost_ms");
+        if (!g_cpu_boost_disabled && cpu_boost_ms >= 0) {
+            int rc = write_int(kCpuBoostMsPath, cpu_boost_ms);
+            if (rc != 0) {
+                ALOGW("Failed to write input_boost_ms rc=%d", rc);
+                if (should_disable_for_rc(rc)) g_cpu_boost_disabled = 1;
+            }
         }
     }
 
-    // Scheduler boost on input (aggressive)
-    if (sched_boost_on_input >= 0) {
-        if (write_int(kSchedBoostOnInputPath, sched_boost_on_input) != 0) {
-            ALOGW("Failed to write sched_boost_on_input");
+    if (!g_sched_boost_disabled && gSchedBoostPath && sched_boost_on_input >= 0) {
+        int rc = write_sched_boost_value(gSchedBoostPath, sched_boost_on_input);
+        if (rc != 0) {
+            ALOGW("Failed to write sched boost rc=%d", rc);
+            if (should_disable_for_rc(rc)) g_sched_boost_disabled = 1;
         }
     }
 
-    // GPU boost (if node exists)
-    if (gGpuMinPwrlevelPath && gpu_min_pwrlevel >= 0) {
-        if (write_int(gGpuMinPwrlevelPath, gpu_min_pwrlevel) != 0) {
-            ALOGW("Failed to write GPU min_pwrlevel");
+    if (!g_gpu_boost_disabled && gGpuMinPwrlevelPath && gpu_min_pwrlevel >= 0) {
+        int rc = write_int(gGpuMinPwrlevelPath, gpu_min_pwrlevel);
+        if (rc != 0) {
+            ALOGW("Failed to write GPU min_pwrlevel rc=%d", rc);
+            if (should_disable_for_rc(rc)) g_gpu_boost_disabled = 1;
         }
     }
 
+    dump_state("after_apply");
     pthread_mutex_unlock(&g_boost_lock);
 
     struct restore_args* a = (struct restore_args*)calloc(1, sizeof(*a));
@@ -279,14 +548,12 @@ static void restore_now() {
 }
 
 // -----------------------------------------------------------------------------
-// Existing QCOM PowerHAL logic (profiles + video encode etc.)
+// Existing QCOM PowerHAL logic (kept minimal; your tree likely uses power_hint_override hooks)
 // -----------------------------------------------------------------------------
 
-static int video_encode_hint_sent;
-
-const int kMinInteractiveDuration = 500;  /* ms */
-const int kMaxInteractiveDuration = 5000; /* ms */
-const int kMaxLaunchDuration = 5000;      /* ms */
+const int kMinInteractiveDuration = 500;
+const int kMaxInteractiveDuration = 5000;
+const int kMaxLaunchDuration = 5000;
 
 static int current_power_profile = PROFILE_BALANCED;
 
@@ -327,18 +594,15 @@ int get_number_of_profiles() {
 }
 #endif
 
-static int set_power_profile(void* data) {
+static __attribute__((unused)) int set_power_profile(void* data) {
     int profile = data ? *((int*)data) : 0;
     int ret = -EINVAL;
     const char* profile_name = NULL;
 
     if (profile == current_power_profile) return 0;
 
-    ALOGV("%s: Profile=%d", __func__, profile);
-
     if (current_power_profile != PROFILE_BALANCED) {
         undo_hint_action(DEFAULT_PROFILE_HINT_ID);
-        ALOGV("%s: Hint undone", __func__);
         current_power_profile = PROFILE_BALANCED;
     }
 
@@ -346,17 +610,14 @@ static int set_power_profile(void* data) {
         ret = perform_hint_action(DEFAULT_PROFILE_HINT_ID, profile_power_save,
                                   ARRAY_SIZE(profile_power_save));
         profile_name = "powersave";
-
     } else if (profile == PROFILE_HIGH_PERFORMANCE) {
         ret = perform_hint_action(DEFAULT_PROFILE_HINT_ID, profile_high_performance,
                                   ARRAY_SIZE(profile_high_performance));
         profile_name = "performance";
-
     } else if (profile == PROFILE_BIAS_POWER) {
         ret = perform_hint_action(DEFAULT_PROFILE_HINT_ID, profile_bias_power,
                                   ARRAY_SIZE(profile_bias_power));
         profile_name = "bias power";
-
     } else if (profile == PROFILE_BIAS_PERFORMANCE) {
         ret = perform_hint_action(DEFAULT_PROFILE_HINT_ID, profile_bias_performance,
                                   ARRAY_SIZE(profile_bias_performance));
@@ -373,126 +634,108 @@ static int set_power_profile(void* data) {
     return ret;
 }
 
-static int process_video_encode_hint(void* metadata) {
-    char governor[80];
-    struct video_encode_metadata_t video_encode_metadata;
-
-    if (!metadata) return HINT_NONE;
-
-    if (get_scaling_governor(governor, sizeof(governor)) == -1) {
-        ALOGE("Can't obtain scaling governor.");
-        return HINT_NONE;
-    }
-
-    memset(&video_encode_metadata, 0, sizeof(struct video_encode_metadata_t));
-    video_encode_metadata.state = -1;
-    video_encode_metadata.hint_id = DEFAULT_VIDEO_ENCODE_HINT_ID;
-
-    if (parse_video_encode_metadata((char*)metadata, &video_encode_metadata) == -1) {
-        ALOGE("Error occurred while parsing metadata.");
-        return HINT_NONE;
-    }
-
-    if (video_encode_metadata.state == 1) {
-        if (is_interactive_governor(governor)) {
-            int resource_values[] = {
-                INT_OP_CLUSTER0_USE_SCHED_LOAD,      0x1,
-                INT_OP_CLUSTER1_USE_SCHED_LOAD,      0x1,
-                INT_OP_CLUSTER0_USE_MIGRATION_NOTIF, 0x1,
-                INT_OP_CLUSTER1_USE_MIGRATION_NOTIF, 0x1,
-                INT_OP_CLUSTER0_TIMER_RATE,          BIG_LITTLE_TR_MS_40,
-                INT_OP_CLUSTER1_TIMER_RATE,          BIG_LITTLE_TR_MS_40
-            };
-            perform_hint_action(video_encode_metadata.hint_id, resource_values,
-                                ARRAY_SIZE(resource_values));
-            return HINT_HANDLED;
-        }
-    } else if (video_encode_metadata.state == 0) {
-        if (is_interactive_governor(governor)) {
-            undo_hint_action(video_encode_metadata.hint_id);
-            video_encode_hint_sent = 0;
-            return HINT_HANDLED;
-        }
-    }
-    return HINT_NONE;
-}
-
-// -----------------------------------------------------------------------------
-// Aggressive Interaction / Launch overrides (max smoothness)
-// -----------------------------------------------------------------------------
-
 static void process_interaction_hint(void* data) {
     (void)data;
-    // MAX smoothness preset:
-    // - Big (0-3) floor to 1516800
-    // - Little (4-7) floor to 1209600
-    // - sched_boost_on_input=1 during boost
-    // - GPU min_pwrlevel=0 (max perf)
+    const char* boost = (g_auto_boost_freq[0] != '\0') ? g_auto_boost_freq :
+        "0:1516800 1:1516800 2:1516800 3:1516800 4:1209600 5:1209600 6:1209600 7:1209600\n";
     apply_boost_timed(
-        "0:1516800 1:1516800 2:1516800 3:1516800 4:1209600 5:1209600 6:1209600 7:1209600",
-        700,  // input_boost_ms
-        1,    // sched_boost_on_input
-        0,    // GPU min_pwrlevel
-        650   // duration
+        boost,
+        700,
+        1,
+        0,
+        650
     );
 }
 
 static int process_activity_launch_hint(void* data) {
-    // Frameworks typically send (int*)1 on launch start and (int*)0 or NULL on end.
     int start = (data && *((int*)data) == 1);
     if (start) {
+        const char* boost = (g_auto_boost_freq[0] != '\0') ? g_auto_boost_freq :
+            "0:1516800 1:1516800 2:1516800 3:1516800 4:1209600 5:1209600 6:1209600 7:1209600\n";
         apply_boost_timed(
-            "0:1516800 1:1516800 2:1516800 3:1516800 4:1209600 5:1209600 6:1209600 7:1209600",
-            1600, // input_boost_ms
-            1,    // sched_boost_on_input
-            0,    // GPU min_pwrlevel
-            1300  // duration
+            boost,
+            1600,
+            1,
+            0,
+            1300
         );
-    } else {
-        restore_now();
     }
     return HINT_HANDLED;
 }
 
-// -----------------------------------------------------------------------------
-// Hooks used by framework
-// -----------------------------------------------------------------------------
+static inline int hint_is_interaction(power_hint_t hint) {
+    int v = (int)hint;
+    return (hint == POWER_HINT_INTERACTION) || (v == 1) || (v == 2);
+}
+
+static inline int hint_is_launch(power_hint_t hint) {
+    int v = (int)hint;
+    return (hint == POWER_HINT_LAUNCH) || (v == 7) || (v == 8);
+}
 
 int power_hint_override(power_hint_t hint, void* data) {
     int ret_val = HINT_NONE;
 
+#ifdef POWER_HINT_SET_PROFILE
     if (hint == POWER_HINT_SET_PROFILE) {
         if (set_power_profile(data) < 0) ALOGE("Setting power profile failed. perfd not started?");
         return HINT_HANDLED;
     }
+#endif
 
-    // Skip other hints in high/low power modes
     if (current_power_profile == PROFILE_POWER_SAVE ||
         current_power_profile == PROFILE_HIGH_PERFORMANCE) {
         return HINT_HANDLED;
     }
 
-    switch (hint) {
-        case POWER_HINT_VIDEO_ENCODE:
-            ret_val = process_video_encode_hint(data);
-            break;
-        case POWER_HINT_INTERACTION:
-            process_interaction_hint(data);
-            ret_val = HINT_HANDLED;
-            break;
-        case POWER_HINT_LAUNCH:
-            ret_val = process_activity_launch_hint(data);
-            break;
-        default:
-            break;
+    ALOGI("HINT_IN: hint=%d (0x%x) data=%p data_i32=%d",
+          (int)hint, (unsigned int)hint, data, data ? *((int*)data) : -1);
+
+    if (hint_is_interaction(hint)) {
+        process_interaction_hint(data);
+        ret_val = HINT_HANDLED;
+    } else if (hint_is_launch(hint)) {
+        ret_val = process_activity_launch_hint(data);
     }
+
     return ret_val;
 }
 
 int set_interactive_override(int on) {
-    // When screen turns off, drop any active boosts and restore defaults.
     if (!on) {
         restore_now();
     }
     return HINT_HANDLED;
+}
+
+// -----------------------------------------------------------------------------
+// low-level IO helpers (definitions; prototypes above)
+// -----------------------------------------------------------------------------
+
+static int read_int(const char* path, int* out) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    char buf[64];
+    int n = (int)read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    *out = atoi(buf);
+    return 0;
+}
+
+static int read_str(const char* path, char* out, size_t out_sz) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    int n = (int)read(fd, out, out_sz - 1);
+    close(fd);
+    if (n <= 0) return -1;
+    out[n] = '\0';
+    return 0;
+}
+
+void init_platform(void) {
+    pthread_mutex_lock(&g_boost_lock);
+    cache_defaults_locked();   // gerçek default'u servis açılışında yakala
+    pthread_mutex_unlock(&g_boost_lock);
 }

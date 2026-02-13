@@ -27,6 +27,7 @@
 
 import /vendor/etc/init/hw/init.qcom.usb.rc
 import /vendor/etc/init/hw/init.target.rc
+import /vendor/etc/init/hw/init.zram.rc
 
 on early-init
     mount debugfs debugfs /sys/kernel/debug
@@ -37,8 +38,6 @@ on early-init
 on init
     # Set permissions for persist partition
     mkdir /persist 0771 root system
-	
-	write /proc/sys/vm/swappiness 20
 
 on post-fs
     chmod 0755 /sys/kernel/debug/tracing
@@ -175,6 +174,7 @@ on boot
 # msm specific files that need to be created on /data
 on post-fs-data
     mkdir /data/vendor/misc 01771 system system
+    chmod 0755 /system/bin/set-display.sh
 
     # Create directory used by display clients
     mkdir /data/vendor/display 0770 system graphics
@@ -352,6 +352,7 @@ on property:sys.boot_completed=1
 	write /sys/devices/system/cpu/cpu7/cpufreq/scaling_governor interactive
 	
 	# mutlaka online kalmalı cpu1-2-3
+	write /sys/devices/system/cpu/cpu0/online 1
 	write /sys/devices/system/cpu/cpu1/online 1
     write /sys/devices/system/cpu/cpu2/online 1
     write /sys/devices/system/cpu/cpu3/online 1
@@ -374,7 +375,7 @@ on property:sys.boot_completed=1
     write /dev/cpuset/foreground/cpus 0-7
     write /dev/cpuset/foreground/mems 0
 
-    # Top-app: BIG cores only (UI / games / active app)
+    # Top-app: BIG cores only
     write /dev/cpuset/top-app/cpus 0-7
     write /dev/cpuset/top-app/mems 0
 
@@ -386,7 +387,7 @@ on property:sys.boot_completed=1
     write /dev/cpuset/system-background/cpus 4-7
     write /dev/cpuset/system-background/mems 0
 
-    # Restricted: LITTLE cores only (IMPORTANT)
+    # Restricted: LITTLE cores only
     write /dev/cpuset/restricted/cpus 5-7
     write /dev/cpuset/restricted/mems 0
 
@@ -533,15 +534,35 @@ service qcom-sh /vendor/bin/init.qcom.sh
 on property:ro.vendor.ril.mbn_copy_completed=1
     write /data/vendor/radio/copy_complete 1
 
-service qcom-post-boot /vendor/bin/init.qcom.post_boot.sh
-    class late_start
-    user root
-    group root system wakelock graphics
-    disabled
-    oneshot
-
 on property:sys.boot_completed=1
-    start qcom-post-boot
+	write /sys/devices/system/cpu/cpu0/online 1
+	write /sys/devices/system/cpu/cpu1/online 1
+    write /sys/devices/system/cpu/cpu2/online 1
+    write /sys/devices/system/cpu/cpu3/online 1
+	write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor interactive
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor interactive
+	write /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor interactive
+	write /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor interactive
+	write /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor interactive
+	write /sys/devices/system/cpu/cpu5/cpufreq/scaling_governor interactive
+	write /sys/devices/system/cpu/cpu6/cpufreq/scaling_governor interactive
+	write /sys/devices/system/cpu/cpu7/cpufreq/scaling_governor interactive
+
+    # cpu_boost knobs
+    chown system system /sys/module/cpu_boost/parameters/input_boost_ms
+    chown system system /sys/module/cpu_boost/parameters/input_boost_freq
+    chown system system /sys/module/cpu_boost/parameters/sched_boost_on_input
+    chmod 0664 /sys/module/cpu_boost/parameters/input_boost_ms
+    chmod 0664 /sys/module/cpu_boost/parameters/input_boost_freq
+    chmod 0664 /sys/module/cpu_boost/parameters/sched_boost_on_input
+
+    # sched_boost proc node
+    chown system system /proc/sys/kernel/sched_boost
+    chmod 0664 /proc/sys/kernel/sched_boost
+
+    # kgsl gpu min pwrlevel
+    chown system system /sys/class/kgsl/kgsl-3d0/min_pwrlevel
+    chmod 0664 /sys/class/kgsl/kgsl-3d0/min_pwrlevel
 
 service vendor.atfwd /vendor/bin/ATFWD-daemon
     class late_start
@@ -579,7 +600,6 @@ service vendor.msm_irqbalance /vendor/bin/msm_irqbalance -f /vendor/etc/msm_irqb
 
 on charger
     load_system_props
-    start qcom-post-boot
 
 on property:sys.qbcharger.enable=true
     start qbcharger
