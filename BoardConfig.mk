@@ -77,6 +77,9 @@ BLUETOOTH_HCI_USE_MCT := true
 
 # Build
 BUILD_BROKEN_DUP_RULES := true
+BUILD_BROKEN_USES_BUILD_COPY_HEADERS := true
+BUILD_BROKEN_PREBUILT_ELF_FILES := true
+BUILD_BROKEN_VINTF_PRODUCT_COPY_FILES := true
 ALLOW_MISSING_DEPENDENCIES=true
 
 # Camera
@@ -182,7 +185,7 @@ DISABLE_RILD_OEM_HOOK := true
 # Sepolicy
 #include device/qcom/sepolicy/sepolicy.mk
 BOARD_SEPOLICY_DIRS += $(DEVICE_PATH)/sepolicy/vendor
-#SELINUX_IGNORE_NEVERALLOWS := true
+SELINUX_IGNORE_NEVERALLOWS := true
 
 # Root Directories & Symlinks
 BOARD_ROOT_EXTRA_FOLDERS := persist

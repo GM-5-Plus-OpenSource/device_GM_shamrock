@@ -31,7 +31,6 @@ PRODUCT_ENFORCE_RRO_TARGETS := \
 
 # Permissions
 PRODUCT_COPY_FILES += \
-    external/ant-wireless/antradio-library/com.dsi.ant.antradio_library.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/com.dsi.ant.antradio_library.xml \
     frameworks/native/data/etc/android.hardware.audio.low_latency.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.audio.low_latency.xml \
     frameworks/native/data/etc/android.hardware.audio.pro.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.audio.pro.xml \
     frameworks/native/data/etc/android.hardware.bluetooth.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.bluetooth.xml \
@@ -230,11 +229,11 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/perf/perfboostsconfig.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/perfboostsconfig.xml
 
 # Protobuf
-PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/protobuf/lib/libprotobuf-cpp-full-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib/libprotobuf-cpp-full-3.9.1.so \
-    $(LOCAL_PATH)/protobuf/lib64/libprotobuf-cpp-full-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib64/libprotobuf-cpp-full-3.9.1.so \
-    $(LOCAL_PATH)/protobuf/lib/libprotobuf-cpp-lite-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib/libprotobuf-cpp-lite-3.9.1.so \
-    $(LOCAL_PATH)/protobuf/lib64/libprotobuf-cpp-lite-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib64/libprotobuf-cpp-lite-3.9.1.so
+#PRODUCT_COPY_FILES += \
+    #$(LOCAL_PATH)/protobuf/lib/libprotobuf-cpp-full-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib/libprotobuf-cpp-full-3.9.1.so \
+    #$(LOCAL_PATH)/protobuf/lib64/libprotobuf-cpp-full-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib64/libprotobuf-cpp-full-3.9.1.so \
+    #$(LOCAL_PATH)/protobuf/lib/libprotobuf-cpp-lite-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib/libprotobuf-cpp-lite-3.9.1.so \
+    #$(LOCAL_PATH)/protobuf/lib64/libprotobuf-cpp-lite-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib64/libprotobuf-cpp-lite-3.9.1.so
 
 # HIDL
 PRODUCT_PACKAGES += \
@@ -245,7 +244,12 @@ PRODUCT_PACKAGES += \
 
 # Power
 PRODUCT_PACKAGES += \
-    android.hardware.power@1.2-service-qti
+    android.hardware.power-service-qti
+
+# Protobuf
+PRODUCT_PACKAGES += \
+    libprotobuf-cpp-full-vendorcompat \
+    libprotobuf-cpp-lite-vendorcompat
 
 # RenderScript
 PRODUCT_PACKAGES += \
@@ -299,13 +303,14 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
 	android.hardware.weaver@1.0
 
-# VNDK-SP:
-PRODUCT_PACKAGES += \
-    vndk-sp
-
-# Disable rescue party
 PRODUCT_PROPERTY_OVERRIDES += \
-    persist.sys.disable_rescue=true
+    persist.sys.disable_rescue=true \
+	ro.kernel.ebpf.supported=false
+
+# Binder
+PRODUCT_PACKAGES += \
+    libhwbinder \
+    libhwbinder.vendor
 
 # Rootdir
 PRODUCT_PACKAGES += \
@@ -317,10 +322,6 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_PACKAGES += \
     init.qcom.sh
-
-# Offline charger
-PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/bin/charger:$(TARGET_COPY_OUT_SYSTEM)/bin/charger
 
 # Radio Data Configs
 PRODUCT_COPY_FILES += \

@@ -30,6 +30,30 @@
 #include "power-common.h"
 #include "utils.h"
 
+// --- Bringup fallback for Android 12+ trees (missing legacy power profiles) ---
+#ifndef PROFILE_POWER_SAVE
+#define PROFILE_POWER_SAVE        0
+#endif
+#ifndef PROFILE_BALANCED
+#define PROFILE_BALANCED          1
+#endif
+#ifndef PROFILE_HIGH_PERFORMANCE
+#define PROFILE_HIGH_PERFORMANCE  2
+#endif
+#ifndef PROFILE_BIAS_POWER
+#define PROFILE_BIAS_POWER        3
+#endif
+#ifndef PROFILE_BIAS_PERFORMANCE
+#define PROFILE_BIAS_PERFORMANCE  4
+#endif
+
+#ifndef DEFAULT_PROFILE_HINT_ID
+// Old CAF code used a dedicated "profile" hint id. In S trees this may not exist.
+// 0 is fine as long as your perform_hint_action/undo_hint_action ignores unknown ids.
+#define DEFAULT_PROFILE_HINT_ID   0
+#endif
+// ---------------------------------------------------------------------------
+
 // -----------------------------------------------------------------------------
 // perfd-less boosts (cpu_boost + KGSL)
 // Aggressive UI smoothness: boost CPU floors + sched_boost_on_input + GPU max perf
