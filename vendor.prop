@@ -117,14 +117,6 @@ ro.telephony.default_network=22,22
 ro.telephony.iwlan_operation_mode=legacy
 service.qti.ims.enabled=1
 
-# Enabling ADB
-ro.secure=0
-ro.adb.secure=0
-persist.service.adb.enable=1
-persist.service.debuggable=1
-persist.sys.usb.config=mtp,adb
-sys.usb.configfs=0
-
 # Bluetooth
 bluetooth.hfp.client=1
 qcom.bluetooth.soc=smd
@@ -177,4 +169,4 @@ ro.surface_flinger.set_idle_timer_ms=58
 ro.surface_flinger.set_touch_timer_ms=100
 ro.surface_flinger.set_display_power_timer_ms=1000
 ro.surface_flinger.support_kernel_idle_timer=true
-ro.sf.lcd_density=290
+ro.sf.lcd_density=320

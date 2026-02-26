@@ -216,6 +216,16 @@
         </interface>
         <fqname>@1.0::IDevice/default</fqname>
     </hal>
+      <hal format="hidl">
+        <name>android.hardware.soundtrigger</name>
+        <transport>hwbinder</transport>
+        <version>2.2</version>
+        <interface>
+            <name>ISoundTriggerHw</name>
+            <instance>default</instance>
+        </interface>
+        <fqname>@2.2::ISoundTriggerHw/default</fqname>
+    </hal>
     <hal format="hidl">
         <name>android.hardware.sensors</name>
         <transport arch="32+64">passthrough</transport>
