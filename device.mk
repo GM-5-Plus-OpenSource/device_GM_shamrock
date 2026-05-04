@@ -1,3 +1,15 @@
+# disable traced by default
+PRODUCT_PROPERTY_OVERRIDES += \
+     persist.traced.enable=false
+
+PRODUCT_SYSTEM_SERVER_COMPILER_FILTER := speed-profile
+PRODUCT_ALWAYS_PREOPT_EXTRACTED_APK := true
+
+PRODUCT_USE_PROFILE_FOR_BOOT_IMAGE := true
+PRODUCT_DEX_PREOPT_BOOT_IMAGE_PROFILE_LOCATION := frameworks/base/config/boot-image-profile.txt
+
+PRODUCT_ART_TARGET_INCLUDE_DEBUG_BUILD := false
+PRODUCT_MINIMIZE_JAVA_DEBUG_INFO := true
 
 # Screen density
 PRODUCT_AAPT_PREF_CONFIG := xhdpi
@@ -6,6 +18,13 @@ PRODUCT_AAPT_CONFIG := normal
 # Boot animation
 TARGET_SCREEN_HEIGHT := 1080
 TARGET_SCREEN_WIDTH := 1920
+TARGET_BOOT_ANIMATION_RES := 1080
+TARGET_BOOTANIMATION_HALF_RES := true
+TARGET_BOOTANIMATION_MULTITHREAD_DECODE := true
+TARGET_BOOTANIMATION_PRELOAD := true
+TARGET_BOOTANIMATION_TEXTURE_CACHE := true
+
+PRODUCT_DISABLE_SCUDO := true
 
 # IRQ
 PRODUCT_COPY_FILES += \
@@ -314,11 +333,13 @@ PRODUCT_PACKAGES += \
     fstab.qcom \
     init.qcom.rc \
     init.target.rc \
+    init.zram.rc \
     init.qcom.usb.rc \
     ueventd.qcom.rc
 
 PRODUCT_PACKAGES += \
-    init.qcom.sh
+    init.qcom.sh \
+    init.qcom.post_boot.sh
 
 # Offline charger
 PRODUCT_COPY_FILES += \
