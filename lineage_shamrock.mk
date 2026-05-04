@@ -20,7 +20,7 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 $(call inherit-product, $(SRC_TARGET_DIR)/product/product_launched_with_m.mk)
 
 # Inherit some common lineage stuff
-$(call inherit-product, vendor/aosp/config/common_full_phone.mk)
+$(call inherit-product, vendor/lineage/config/common_full_phone.mk)
 
 # Inherit from shamrock device
 $(call inherit-product, $(LOCAL_PATH)/device.mk)
@@ -30,7 +30,7 @@ TARGET_GAPPS_ARCH=arm64
 PRODUCT_BRAND := GM
 PRODUCT_DEVICE := shamrock
 PRODUCT_MANUFACTURER := General Mobile
-PRODUCT_NAME := aosp_shamrock
+PRODUCT_NAME := lineage_shamrock
 PRODUCT_MODEL := GM 5 Plus
 
 PRODUCT_GMS_CLIENTID_BASE := android-gm
