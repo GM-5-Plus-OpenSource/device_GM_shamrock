@@ -12,8 +12,8 @@ on post-fs-data
     write /sys/block/zram0/disksize 2147483648
 
     # --- SWAP ENABLE ---
-    mkswap /dev/block/zram0
-    swapon /dev/block/zram0 priority 32758
+    exec -- /system/bin/mkswap /dev/block/zram0
+    exec -- /system/bin/swapon /dev/block/zram0 -p 32758
 
     # --- VM TUNING ---
     write /proc/sys/vm/swappiness 60

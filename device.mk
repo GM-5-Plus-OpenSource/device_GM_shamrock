@@ -50,7 +50,6 @@ PRODUCT_ENFORCE_RRO_TARGETS := \
 
 # Permissions
 PRODUCT_COPY_FILES += \
-    external/ant-wireless/antradio-library/com.dsi.ant.antradio_library.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/com.dsi.ant.antradio_library.xml \
     frameworks/native/data/etc/android.hardware.audio.low_latency.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.audio.low_latency.xml \
     frameworks/native/data/etc/android.hardware.audio.pro.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.audio.pro.xml \
     frameworks/native/data/etc/android.hardware.bluetooth.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.bluetooth.xml \
@@ -88,15 +87,18 @@ PRODUCT_PACKAGES += \
 
 # Audio
 PRODUCT_PACKAGES += \
-    android.hardware.audio@2.0-impl \
-    android.hardware.audio@2.0-service \
-    android.hardware.audio.effect@2.0-impl \
-    android.hardware.soundtrigger@2.2-impl \
-    android.hardware.soundtrigger@2.2-service \
+    android.hardware.audio.service \
+    android.hardware.audio@6.0 \
+    android.hardware.audio@6.0-impl \
+    android.hardware.audio.common@6.0 \
+    android.hardware.audio.common@6.0-util \
+    android.hardware.audio.effect@6.0 \
+    android.hardware.audio.effect@6.0-impl \
     audio.primary.msm8952 \
     audio.a2dp.default \
     audio.r_submix.default \
     audio.usb.default \
+    libaudioroute \
     libaudio-resampler \
     libqcompostprocbundle \
     libqcomvisualizer \
@@ -139,7 +141,10 @@ PRODUCT_PACKAGES += \
     android.hardware.camera.provider@2.4-service \
     Camera2 \
     libmm-qcamera \
-    libqomx_core
+    libqomx_core \
+    libminijail_32 \
+    libyuv_32 \
+    libexif_32
 
 # Configstore
 PRODUCT_PACKAGES += \
@@ -246,27 +251,23 @@ PRODUCT_PACKAGES += \
     libOmxVenc \
     libstagefrighthw
 
-# Perf
-PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/perf/perfboostsconfig.xml:$(TARGET_COPY_OUT_VENDOR)/etc/perf/perfboostsconfig.xml
-
-# Protobuf
-PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/protobuf/lib/libprotobuf-cpp-full-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib/libprotobuf-cpp-full-3.9.1.so \
-    $(LOCAL_PATH)/protobuf/lib64/libprotobuf-cpp-full-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib64/libprotobuf-cpp-full-3.9.1.so \
-    $(LOCAL_PATH)/protobuf/lib/libprotobuf-cpp-lite-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib/libprotobuf-cpp-lite-3.9.1.so \
-    $(LOCAL_PATH)/protobuf/lib64/libprotobuf-cpp-lite-3.9.1.so:$(TARGET_COPY_OUT_VENDOR)/lib64/libprotobuf-cpp-lite-3.9.1.so
-
 # HIDL
 PRODUCT_PACKAGES += \
     android.hidl.base@1.0 \
-    android.hidl.base@1.0_system \
-    android.hidl.manager@1.0 \
-    android.hidl.manager@1.0_system
+    android.hidl.base@1.0.vendor \
+    libhidltransport \
+    libhidltransport.vendor \
+    libhwbinder \
+    libhwbinder.vendor
 
 # Power
 PRODUCT_PACKAGES += \
-    android.hardware.power@1.2-service-qti
+    android.hardware.power-service-qti
+
+# Protobuf
+PRODUCT_PACKAGES += \
+    libprotobuf-cpp-full-vendorcompat \
+    libprotobuf-cpp-lite-vendorcompat
 
 # RenderScript
 PRODUCT_PACKAGES += \
@@ -324,9 +325,9 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     vndk-sp
 
-# Disable rescue party
 PRODUCT_PROPERTY_OVERRIDES += \
-    persist.sys.disable_rescue=true
+    persist.sys.disable_rescue=true \
+	ro.kernel.ebpf.supported=false
 
 # Rootdir
 PRODUCT_PACKAGES += \
@@ -340,10 +341,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     init.qcom.sh \
     init.qcom.post_boot.sh
-
-# Offline charger
-PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/rootdir/bin/charger:$(TARGET_COPY_OUT_SYSTEM)/bin/charger
 
 # Radio Data Configs
 PRODUCT_COPY_FILES += \
@@ -400,9 +397,6 @@ PRODUCT_COPY_FILES += \
 # Wi-Fi Display
 PRODUCT_PACKAGES += \
     libnl
-
-PRODUCT_BOOT_JARS += \
-    WfdCommon
 
 # Inherit vendor
 $(call inherit-product, vendor/GM/shamrock/shamrock-vendor.mk)
