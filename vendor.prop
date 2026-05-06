@@ -55,6 +55,8 @@ dalvik.vm.heapmaxfree=8m
 # Display
 debug.hwui.use_buffer_age=true
 debug.sf.hw=1
+ro.surface_flinger.vsync_event_phase_offset_ns=5000000
+ro.surface_flinger.vsync_sf_event_phase_offset_ns=7500000
 debug.sf.use_phase_offsets_as_durations=1
 persist.demo.hdmirotationlock=false
 ro.hardware.egl=adreno
@@ -65,7 +67,9 @@ sdm.debug.disable_skip_validate=1
 vendor.display.disable_skip_validate=1
 vendor.display.enable_default_color_mode=1
 vendor.gralloc.enable_fb_ubwc=1
-video.accelerate.hw=1
+debug.sf.disable_backpressure=1
+debug.sf.enable_gl_backpressure=1
+persist.graphics.vulkan.disable=true
 
 # Perf
 ro.sys.fw.dex2oat_thread_count=4
@@ -142,6 +146,10 @@ vidc.enc.dcvs.extra-buff-count=2
 ro.vendor.qti.core_ctl_min_cpu=2
 ro.vendor.qti.core_ctl_max_cpu=4
 
+# usap
+persist.device_config.runtime_native.usap_pool_enabled=true
+persist.device_config.runtime_native.usap_pool_size_max=5
+
 #HWUI properties
 ro.hwui.texture_cache_size=48
 ro.hwui.layer_cache_size=32
@@ -169,4 +177,4 @@ ro.surface_flinger.set_idle_timer_ms=58
 ro.surface_flinger.set_touch_timer_ms=100
 ro.surface_flinger.set_display_power_timer_ms=1000
 ro.surface_flinger.support_kernel_idle_timer=true
-ro.sf.lcd_density=320
+ro.sf.lcd_density=410
