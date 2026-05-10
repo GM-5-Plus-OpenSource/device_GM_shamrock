@@ -25,7 +25,11 @@ $(call inherit-product, vendor/aosp/config/common_full_phone.mk)
 # Inherit from shamrock device
 $(call inherit-product, $(LOCAL_PATH)/device.mk)
 
-TARGET_GAPPS_ARCH=arm64
+##Android One Experience required flags##
+# if your build is ready to release:
+CUSTOM_BUILD_TYPE := nougatcamtest
+PRODUCT_CUSTOM_MODEL := GM5P
+##Android One Experience Required Flags end##
 
 PRODUCT_BRAND := GM
 PRODUCT_DEVICE := shamrock

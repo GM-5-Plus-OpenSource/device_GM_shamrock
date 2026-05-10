@@ -1,0 +1,11 @@
+cc_library_shared {
+    name: "libshim_fence",
+    srcs: ["libshim_fence.cpp"],
+
+    shared_libs: [
+        "libui",
+        "libutils",
+    ],
+
+    vendor: true,
+}
